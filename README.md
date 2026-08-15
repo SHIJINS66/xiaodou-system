@@ -121,12 +121,26 @@ OpenClaw 是生成式、响应式的：它会回应，但不会主动、定时�
 
 ## 四、效果演示
 
-下图展示了本框架在**正常运行状态下**的实际运行效果：角色基于自己的生活轨迹自动生成对话、感知时机主动触达，并适时分享照片与自拍。
+下面分两部分展示本框架在**正常运行状态下**的实际表现：一部分是角色与用户在 Telegram 上的真实对话；另一部分是系统在后台持续沉淀下来的数据（聊天记录、每日规划、自拍存档）。
+
+### 4.1 Telegram 对话展示
+
+角色基于自己的生活轨迹自动生成对话、感知时机主动触达，并在合适的时候分享自拍：
 
 <p align="center">
   <img src="docs/screenshot-telegram.jpg" alt="正常运行状态下的 Telegram 对话效果" width="800"/>
   <br/>
-  <em>图 2：正常运行状态下，角色自主生成并发送的 Telegram 日常对话与自拍</em>
+  <em>图 2-a：角色在 Telegram 上的日常对话与自拍</em>
+</p>
+
+### 4.2 文件持久化展示
+
+框架在运行过程中会自动把每一段经历沉淀成文件：`daily/` 保存每日生活计划，`chatlog/` 保存与用户的聊天记录，`daily_selfies/` 保存自动生成的自拍档案。长期记忆则不断汇入 `MEMORY.md`：
+
+<p align="center">
+  <img src="docs/filesystem-directories.jpg" alt="框架自动沉淀的 daily / chatlog / daily_selfies 目录" width="800"/>
+  <br/>
+  <em>图 2-b：框架自动沉淀的 daily / chatlog / daily_selfies 数据目录</em>
 </p>
 
 以一个自然日为例，系统按下列时间线自动运转（角色语气与话题由核心文件与当天生活轨迹决定，框架仅负责在正确的时间以正确的方式触达）：

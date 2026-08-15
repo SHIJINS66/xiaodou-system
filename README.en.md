@@ -123,12 +123,26 @@ If OpenClaw is like the brain and nervous system that "thinks and converses," th
 
 ## IV. Demonstration
 
-The figure below shows the framework in **normal operation**: the persona autonomously generates conversations from its own life trajectory, senses timing to reach out proactively, and shares photos and selfies at appropriate moments.
+The figures below show the framework in **normal operation** in two parts: one shows real conversations between the persona and the user on Telegram; the other shows the data the system continuously persists in the background (chat logs, daily plans, selfie archives).
+
+### 4.1 Telegram Conversations
+
+The persona autonomously generates conversations from its own life trajectory, senses timing to reach out proactively, and shares selfies at appropriate moments:
 
 <p align="center">
   <img src="docs/screenshot-telegram.jpg" alt="Telegram conversations in normal operation" width="800"/>
   <br/>
-  <em>Fig. 2: Telegram conversations and selfies autonomously generated and sent by the persona in normal operation</em>
+  <em>Fig. 2-a: Day-to-day Telegram conversations and selfies by the persona</em>
+</p>
+
+### 4.2 File Persistence
+
+As the framework runs, every experience is automatically persisted to files: `daily/` stores the daily life plan, `chatlog/` stores conversations with the user, and `daily_selfies/` stores the auto-generated selfie archive. Long-term memory keeps accumulating into `MEMORY.md`:
+
+<p align="center">
+  <img src="docs/filesystem-directories.jpg" alt="auto-persisted daily / chatlog / daily_selfies directories" width="800"/>
+  <br/>
+  <em>Fig. 2-b: The auto-persisted daily / chatlog / daily_selfies data directories</em>
 </p>
 
 Taking a natural day as an example, the system runs automatically along the following timeline (the persona's tone and topics are determined by the core files and that day's life trajectory; the framework is responsible only for reaching out at the right time in the right way):
