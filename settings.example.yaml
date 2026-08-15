@@ -1,0 +1,347 @@
+# =============================================================================
+# companion-framework — settings.example.yaml
+# 本文件是整套框架的「数据契约」：所有脚本、agent 指令、执行器都从这里读配置。
+# 复制为 settings.yaml 后按自己实际填写；不要提交真实密钥到仓库。
+# =============================================================================
+
+schema_version: "2.0"
+
+# -----------------------------------------------------------------------------
+# 1. 顶层身份与运行时环境（替代硬编码路径 / 角色名）
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# 0. 实例标识（system）—— 替代硬编码的 "xiaodou" marker / 日志前缀
+#    instance_name 只用于注入 marker 前缀、日志前缀，不要填真实角色名——
+#    marker 会写进 session 历史，用角色名会把"这是 AI 角色"暴露给模型。
+# -----------------------------------------------------------------------------
+system:
+  instance_name: "companion"
+
+runtime:
+  # 实例目录 = 用户的 OpenClaw workspace。脚本里所有相对路径都相对这个目录解析。
+  # OpenClaw 默认从这里读取 AGENTS/SOUL/IDENTITY/USER/TOOLS/MEMORY 等核心文件，
+  # 本框架的 step 系统与此共用同一份文件。默认为 ~/.openclaw/workspace。
+  root_dir: "~/.openclaw/workspace"
+  timezone: "Asia/Shanghai"
+
+  # 目录布局（都可以被覆盖）。默认值已给出，通常不用改。
+  dirs:
+    config: "config"
+    character: "assets/character"        # 角色参考图
+    daily: "daily"                        # 当日计划/状态/记忆
+    chatlog: "chatlog"                    # 原始对话与事件证据
+    memory: "memory"                      # 长期记忆（跨天）
+    selfies: "daily_selfies"              # 生成的自拍成品
+    logs: "logs"
+    # ---- step04 运行态目录（相对 root_dir）----
+    journal: "state/journal"              # 事件日志（按日期 .jsonl）
+    transactions: "state/step03-events"   # event 事务归档（step03 产物）
+    step04_state: "state/step04"          # finalize/rollover 状态机
+    backups: "~/companion-backups"       # 备份归档。必须放在 OpenClaw 目录(~/.openclaw)之外，
+                                    # 否则 `openclaw backup create` 会拒绝把备份写到自身源码路径内。
+  # .env 文件路径（相对 root_dir；通常不用改）
+  env_file: ".env"
+
+# -----------------------------------------------------------------------------
+# 2. 角色（character）—— 元信息
+#    角色的人格正文由 OpenClaw workspace 根目录的 SOUL.md / IDENTITY.md / LIFE.md
+#    提供（本框架与 OpenClaw 共用同一份文件，不另建 person 目录）。
+#    这里只填供日志/文案/自拍 prompt 占位渲染用的元信息。
+# -----------------------------------------------------------------------------
+character:
+  # 角色名称，会出现在日志/文案/自拍 prompt 占位里
+  name: "你的角色名"
+  # 角色名在对话中的对外称呼（如果和 name 不同）
+  display_name: "你的角色名"
+  # ---------- 人称与性别（生图 prompt 用）----------
+  # 这三项决定生图 prompt 里如何指代角色，换角色（尤其换性别）时务必同步改。
+  pronoun_subject: "她"
+  pronoun_object: "她"
+  person_noun: "女生"
+  # 外型与参考图（生图一致性依赖这里）
+  appearance:
+    reference_dir: "assets/character"
+    # 参考图清单：生图时作为人物一致性锚点。filename 相对于 reference_dir；
+    # sha256 是文件哈希（init 时生成，防止参考图被替换）。
+    reference_images:
+      - filename: "reference_1.png"
+        sha256: "REPLACE_WITH_SHA256"
+
+# -----------------------------------------------------------------------------
+# 3. 陪伴对象（companion）—— 元信息
+#    陪伴对象的稳定信息由 OpenClaw workspace 根目录的 USER.md 提供。
+#    这里只填供 prompt/栏目/日志占位渲染用的元信息。
+# -----------------------------------------------------------------------------
+companion:
+  # 陪伴对象的稳定身份键，用于 prompt/栏目/日志里的对象指代，不填真名（避免暴露真实身份）
+  key: "companion"
+  # 对陪伴对象的称呼集合，文案生成时从这里抽样
+  names:
+    - "宝宝"
+    - "老公"
+  # 关系定位，用于给 LLM 提供上下文语气
+  relation: "稳定恋人"
+
+# -----------------------------------------------------------------------------
+# 4. 作息与互动节奏（替代 AGENTS.md 里的硬编码频率/窗口）
+#    这是「每天主动联系几次、什么类型」的默认政策。
+# -----------------------------------------------------------------------------
+interaction_policy:
+  # 每日主动互动目标数量（工作日/周末可不同）
+  daily_defaults:
+    total_target: 6
+    chat_target: 2
+    status_target: 3
+    selfie_target: 1
+    silent_target: 0
+  # 主动消息最小间隔（分钟），防止同一小时连发
+  min_gap_minutes: 90
+  # 同一小时最多几个主动任务
+  max_per_hour: 1
+  # 连续未回复达到此阈值，触发一次「确认对方还好吗」的关心消息
+  unanswered_trigger_count: 3
+  # 允许的互动类型白名单
+  allowed_types:
+    - chat
+    - status
+    - selfie
+    - silent
+
+# -----------------------------------------------------------------------------
+# 5. 自拍/生图配置（替代硬编码的 Seedream + DeepSeek spec 链路）
+#    做成可插拔 provider，换图模型不重写逻辑。
+# -----------------------------------------------------------------------------
+selfie:
+  # 生图链路会把 character.pronoun_subject / pronoun_object / person_noun 注入
+  # 自拍 prompt 的人称。若角色非女性，务必同步改 character 里这三项，
+  # 否则仍会生成"女生 / 她"写死的文案。
+  # 生成自拍时是否启用（关掉则 selfie 事件退化为纯文字 status）
+  enabled: true
+  # 参考图是否必须（没有参考图时禁止生图，保证人物一致）
+  reference_images_required: true
+  # 自拍 spec 生成（文字规格）的参数
+  spec_max_tokens: 800
+  spec_retry_attempts: 2
+  # 图模型 provider
+  image_provider:
+    # 可选：seedream | openai_image | stable_diffusion_local | replicate
+    type: "seedream"
+    # 各 provider 需要的参数放这里（seedream 示例）
+    options:
+      base_url: "https://ark.cn-beijing.volces.com/api/v3"
+      model: "doubao-seedream-5-0-260128"
+      api_key_env: "ARK_API_KEY"
+      timeout_seconds: 120
+  # 自拍场景文本生成模型（spec 生成），独立于对话模型
+  spec_provider:
+    type: "openai_compatible"
+    options:
+      base_url: "https://api.deepseek.com/v1"
+      model: "deepseek-v4-flash"
+      api_key_env: "DEEPSEEK_API_KEY"
+      timeout_seconds: 60
+  # 默认输出尺寸/格式规范
+  output:
+    format: "jpg"
+    # 文件名模板字段：date / time / event_id / scene
+    name_template: "{date}_{time}_{event_id}_{scene}"
+
+# -----------------------------------------------------------------------------
+# 6. 对话模型（Planner / 执行器 / 文案生成可以分别指定模型）
+# -----------------------------------------------------------------------------
+models:
+  # 主对话模型（agent 本体）
+  main:
+    provider: "deepseek"
+    model: "deepseek-v4-flash"
+    api_key_env: "DEEPSEEK_API_KEY"
+    base_url: "https://api.deepseek.com/v1"
+  # 每日计划生成模型（Planner）
+  planner:
+    # type 与 provider 二选一即可（工厂两者兼容），两者都指 provider 类型名
+    type: "deepseek"          # deepseek | openai_compatible
+    provider: "deepseek"
+    model: "deepseek-v4-flash"
+    base_url: "https://api.deepseek.com/v1"
+    api_key_env: "DEEPSEEK_API_KEY"
+    timeout_seconds: 240
+    temperature: 0.35
+    max_tokens: 16000
+    # deepseek 原生 provider 强校验需 thinking=enabled 且 reasoning_effort in (high,max)
+    thinking_type: "enabled"
+    reasoning_effort: "high"
+  # 最终文案生成模型（可轻量）
+  caption:
+    type: "deepseek"
+    provider: "deepseek"
+    model: "deepseek-v4-flash"
+    base_url: "https://api.deepseek.com/v1"
+    api_key_env: "DEEPSEEK_API_KEY"
+  # 日终记忆生成模型（step04）——支持多 profile 分层重试，对应线上
+  # generation_profiles() 的 normal / repair / conflict 三档。
+  # 同一用途可配多个 profile，按顺序尝试：先正常生成，校验不过
+  # 用 repair（追加修复指令），仍冲突用 conflict_high（thinking 高投入）。
+  memory:
+    # 最多尝试几档（1~3），对应线上 memory_generation_attempts
+    generation_attempts: 3
+    profiles:
+      - name: normal
+        thinking: "disabled"          # disabled | enabled
+        reasoning_effort: null        # 仅 thinking=enabled 时生效: low|medium|high|max
+        max_tokens: 16384
+        # 生成失败后的修复/冲突指令模板（附在 prompt 后），可选
+        repair_instruction: null
+      - name: repair
+        thinking: "disabled"
+        reasoning_effort: null
+        max_tokens: 16384
+        repair_instruction: "\n\n这是一次定向修复。上次输出未通过校验：{error_summary}\n请重新通读全部 canonical_messages。只返回严格 JSON，不解释。"
+      - name: conflict
+        thinking: "enabled"
+        reasoning_effort: "high"
+        max_tokens: 32768
+        repair_instruction: "\n\n这是最后一次冲突处理。此前失败：{error_summary}\n仅在证据冲突时谨慎判断，不得虚构。只返回严格 JSON。"
+
+# -----------------------------------------------------------------------------
+# 7. 消息分发（替代写死的 Telegram + Gateway session 注入）
+# -----------------------------------------------------------------------------
+delivery:
+  # 主动消息 / 自拍发到哪里
+  channel:
+    type: "telegram"          # telegram | openclaw_gateway | webhook
+    options:
+      bot_token_env: "TELEGRAM_BOT_TOKEN"
+      chat_id_env: "TELEGRAM_CHAT_ID"
+  # 是否在发送成功后把配文摘要注入 session 历史（供模型后续理解）
+  session_inject:
+    enabled: true
+    # 注入内容只保留文本摘要，不含密钥/base64/图片
+    mode: "summary"
+
+# -----------------------------------------------------------------------------
+# 8. 每日计划生成（Planner）输入来源
+# -----------------------------------------------------------------------------
+planning:
+  # 生成计划时读取哪些文件（相对 root_dir）。
+  # 对应线上 CORE_FILES：step02 读 3 个、step03 读 6、step04 读 7，
+  # 这里统一成一份完整清单，各 step 按需取子集。
+  # 生成计划时读取哪些核心文件（相对 root_dir = OpenClaw workspace 根）。
+  # 与 OpenClaw 原生加载的核心文件共用同一份，用户可直接上传同名文件替换。
+  context_files:
+    - "AGENTS.md"      # 运行规则
+    - "IDENTITY.md"    # 固定身份
+    - "SOUL.md"        # 性格/相处方式
+    - "LIFE.md"        # 生活规律与作息（Planner 依赖）
+    - "USER.md"        # 陪伴对象信息
+    - "TOOLS.md"       # 工具与脚本
+    - "MEMORY.md"      # 长期记忆
+  # 回看最近几天 daily memory 用于连续性
+  recent_memory_days: 7
+  # 是否拉取天气（需要时再开，避免虚构）
+  weather_enabled: false
+  # 事件类型 → 候选时间段的比例策略（保持和现有逻辑一致即可）
+  event_templates:
+    chat: {}
+    status: {}
+    selfie: {}
+    silent: {}
+
+# -----------------------------------------------------------------------------
+# 9. 长期记忆与日志（替代 MEMORY.md / daily / chatlog 机制）
+# -----------------------------------------------------------------------------
+memory:
+  # 长期记忆文件（MEMORY.md 的角色无关版）
+  long_term_file: "MEMORY.md"
+  # 每日融合记忆章节标题模板。用 {character_name} 与 {companion_key} 占位，
+  # 改名时不再改代码。
+  section_templates:
+    actual_life: "{character_name}当天实际生活"
+    proactive_shares: "主动分享和自拍"
+    companion_responses: "{companion_key}的反应"
+    important_conversations: "重要对话"
+    emotional_notes: "情绪和关系"
+    unresolved_items: "未解决事项"
+    tomorrow_implications: "对明天的影响"
+    long_term_candidates: "长期记忆候选"
+  # 每日记忆融合记忆文档标题模板
+  title_template: "# {character_name} Daily Memory — {date}"
+  # 每日融合记忆生成时间（本地时间 HH:MM）
+  daily_memory_at: "00:20"
+  # 是否自动压缩长期记忆（避免超限）
+  auto_compress: true
+  # 长期记忆软上限（字符数），超限触发压缩
+  max_chars: 5000
+
+# -----------------------------------------------------------------------------
+# 10. 调度与执行（cron / at）——对应系统级调度层
+#     线上有两份 /etc/cron.d（morning + nightly）+ at 队列动态调度。
+#     框架提供 cron 模板目录，安装时把这节的值注入替换占位符。
+# -----------------------------------------------------------------------------
+scheduling:
+  # 早晨计划生成时间（本地 HH:MM）——线上 /etc/cron.d/xiaodou-morning 每天 06:00
+  planner_at: "06:00"
+  # 计划校验不过时怎么办
+  on_validation_fail: "abort"   # abort | retry_once
+  # 事件执行后是否注入 session
+  session_inject_enabled: true
+
+  # 系统级 cron 模板（相对 root_dir/cron），安装时把下段变量替换进文件
+  cron_templates:
+    morning: "xiaodou-morning"    # 每天生成计划 → 构 at
+    nightly: "xiaodou-nightly"    # step04 记忆五条（finalize/incremental/attach/rollover/compress）
+
+  # cron 安装参数（init.sh 定时层子步骤用）
+  cron:
+    install_dir: "/etc/cron.d"        # 落盘位置
+    lock_dir: "state/locks"           # flock 锁目录（相对 state_root）
+    log_dir: "logs"                  # 日志目录（相对 root_dir）
+
+  # 构 at 的调度器可执行文件（线上 /usr/bin/at、/usr/bin/atq）
+  scheduler:
+    at_bin: "/usr/bin/at"
+    atq_bin: "/usr/bin/atq"
+    atd_service: "atd"               # systemctl enable 的服务名
+
+  # 时区设置（三重必须一致）：cron 的 CRON_TZ、at 的 AT_ENV.TZ、脚本 datetime.now(TZ)
+  # 统一读 runtime.timezone，安装时注入
+  timezone: "Asia/Shanghai"          # == runtime.timezone，勿改到不一致
+
+  # at 任务执行时的固定 env 白名单（少暴露密钥，仅允许这些）
+  at_env: ["PATH", "SHELL", "LC_ALL", "LANG", "TZ", "HOME"]
+
+  # ---- Gateway inject（step03 主动消息注入）----
+  # 注入主动消息 / 读会话历史时，通过 OpenClaw 本地 CLI 调 gateway。
+  # session_key 是 OpenClaw 里一个已存在会话的 key（注册/引导时用户指定），
+  # 系统从 sessions.list 自动解析出对应 session id 后注入，无需写死 session id。
+  gateway:
+    openclaw_bin: "/usr/bin/openclaw"   # 本地 openclaw CLI 路径
+    session_key: ""                      # ← 必填：OpenClaw 目标会话 key（引导时填）
+    openclaw_timeout_seconds: 60
+    # 显式指定要连的 OpenClaw gateway 地址（可选）。
+    # 缺省不设 → CLI 按 local loopback 探测（默认连 18789，即本机默认实例）。
+    # 连独立实例时填它的 WebSocket 地址，例如：ws://127.0.0.1:19201
+    ws_url: ""
+    # 若 Gateway 开了 token 授权（gateway.auth.token），可在此或 .env 提供：
+    auth_token_env: "OPENCLAW_GATEWAY_TOKEN"   # 留空则本地 CLI 默认免授权
+    # 显式指向某个 OpenClaw 实例（可选，默认以 root_dir 为 HOME 推断）。
+    # 覆盖 common.openclaw_env 传给 OpenClaw CLI 的实例定位变量。
+    # 缺省不设 → OpenClaw 从 $HOME/.openclaw 找 state（沿用线上行为）。
+    # 独立实例示例：
+    #   extra_env:
+    #     OPENCLAW_CONFIG_PATH: "/home/cf-test/.openclaw/openclaw.json"
+    #     OPENCLAW_STATE_DIR:   "/home/cf-test/.openclaw"
+    #     OPENCLAW_PROFILE:     "default"
+
+# -----------------------------------------------------------------------------
+# 11. 密钥汇总（统一从环境变量读，这里只声明变量名，不写值）
+#     真实值放在实例目录的 .env，或系统环境变量里。
+# -----------------------------------------------------------------------------
+secrets:
+  # 运行核心必需的环境变量（缺则拒绝启动）。
+  # 注意：生图(ARK_API_KEY/自拍)是可选的——不配置时自拍事件会按生图 provider 的
+  #   降级规则处理（例如跳过自拍或发纯文字），日常计划/消息不受影响。
+  required_env:
+    - "DEEPSEEK_API_KEY"     # 对话模型 / spec 生成（核心必需）
+    - "TELEGRAM_BOT_TOKEN"   # 消息分发（核心必需）
+    - "TELEGRAM_CHAT_ID"     # 主动消息发往哪个 chat（核心必需）
