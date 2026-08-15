@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/badge/platform-Linux-blue" alt="platform"/>
   <img src="https://img.shields.io/github/v/release/SHIJINS66/xiaodou-system?color=green&label=release" alt="release"/>
   <img src="https://img.shields.io/badge/channel-Telegram-lightgrey" alt="channel"/>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="lang-en"/></a>
 </p>
 
 ## 摘要
