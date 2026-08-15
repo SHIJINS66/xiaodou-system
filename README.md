@@ -24,7 +24,7 @@
 
 - **step02 · 每日规划**：读取一日的核心文件与天气信息，为角色生成当天的完整生活轨迹，并通过 Schema 校验后落盘。
 - **step03 · 调度与执行**：将当天需要主动触达用户的非静默事件提交至 `at` 定时器，到点执行——生成文案、调用图像服务（如需自拍）、通过 Telegram 发送，并回写当日状态。
-- **step04 · 日终记忆**：在当天结束后，汇总聊天记录生成融合式每日记忆，并入长期记忆文件（保留最近七日，超额自动压缩），并在凌晨完成会话重置。
+- **step04 · 日终记忆**：在当天结束后，汇总聊天记录生成融合式每日记忆，并入长期记忆文件（保留最近七日）；并在每周日由 LLM 对长期记忆正文去重、合并、压缩后重写最上方正文，防止篇幅无限增长；凌晨完成会话重置。
 - **持久层**：所有阶段的配置、状态、日志、备份及长期记忆均落盘于工作目录，并定期归档校验。
 
 上述阶段所需的外部依赖，均通过 `providers/` 抽象层接入，包括语言模型、图像生成、消息发送与 OpenClaw 网关。
@@ -53,6 +53,10 @@
 
 04:00  step04 · 会话重置 rollover
         └─ 生成会话承接信息并重置会话，开启新的一天
+
+周日   step04 · 每周正文整理 compress
+        └─ 由 LLM 对 MEMORY.md 的全部 section 去重、合并与压缩，重写最上方的长期记忆正文
+           （篇幅收敛到上限，保留稳定事实与长期偏好，同日增量不再重复追加）
 ```
 
 每一步均由确定性脚本实现，配合 JSON Schema 校验、幂等门、文件锁与状态回写，不依赖模型偶发输出。
@@ -204,14 +208,18 @@ OpenClaw 启动时自动读取它们。init.sh 已把模板复制到位，你只
 ### step04 夜间记忆包含什么
 
 - `finalize_day` / `finalize_yesterday` — 生成昨天融合式每日记忆（schedule 校验 → schema 校验 → chatlog render → LLM 生成 → MEMORY／daily memory 落盘，`--apply` 落地 + `--ack FINALIZE_DAY` 门）
-- `update_memory_md` — 长期记忆四种模式：`incremental` / `attach`（保留最近 7 天）/ `compress`（超长压缩）/ `prune`
+- `update_memory_md` — 长期记忆维护，四种模式：
+  - `incremental`：将值得长期保留的候选并入 `MEMORY.md`
+  - `attach`：将当日完整记忆正文合并，保留最近 7 天
+  - `compress`（每周一次，周日）：由 LLM 对 `MEMORY.md` **全部 section 去重、合并并压缩**，重写文件最上方的长期记忆正文，控制篇幅不无限增长
+  - `prune`：按保留天数清理过期片段
 - `session_rollover` — 凌晨会话重置 + carryover（带 quiescence 等待与一致性校验）
 - `normalize_chatlog` / `render_chatlog` — 从 OpenClaw gateway 会话历史还原、剥内部事件 marker，渲染成 `chatlog/YYYY-MM-DD.md`
 - `reconcile_daily_state` — 当日 daily JSON 与实际发送记录调和
 - 备份链 `backup_openclaw` / `raw_backup` / `mirror_openclaw_memory` — 会话 / 记忆 / 原始证据归档与校验
 - 编排使用 `step04_config` 从 `settings.yaml` 构造线上同构 config，零硬编码路径
 
-对应 cron：`finalize (00:20/00:50)` → `incremental (02:00)` → `attach (02:03)` → `rollover (04:00)` → `compress (周日 04:30)`
+对应 cron：`finalize (00:20/00:50)` → `incremental (02:00)` → `attach (02:03)` → `rollover (04:00)` → `compress（周日 04:30，重写最上方正文）`
 
 ### 待办
 
