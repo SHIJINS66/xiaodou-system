@@ -1,0 +1,25 @@
+# step04 夜间记忆 — cron 模板（三步流水线的第 3 步）
+# 当天结束后生成融合式每日记忆并入 MEMORY.md，并在凌晨完成 Incremental / Attach /
+# Session rollover / Weekly compress。
+# 安装时由 init.sh 把 {INSTALL_ROOT}/{SETTINGS}/{LOCK}/{LOG}/{PYTHON_BIN}/{TIMEZONE}
+# 替换为实例实际路径。CRON_TZ 与各 CLI 的 datetime.now 时区三重一致。
+
+CRON_TZ={TIMEZONE}
+TZ={TIMEZONE}
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# 1) finalize_day（生成昨天 daily memory，00:20 / 00:50 两次）
+20,50 0 * * * {CRON_USER} {PYTHON_BIN} {INSTALL_ROOT}/scripts/finalize_yesterday.py --settings {SETTINGS} --apply --ack FINALIZE_DAY >> {LOG}/step04-finalize.log 2>&1
+
+# 2) Incremental 长期记忆更新（finalize 完成后）
+0 2 * * * {CRON_USER} {PYTHON_BIN} {INSTALL_ROOT}/scripts/update_memory_md.py --mode incremental --settings {SETTINGS} --date $(date -d yesterday +\%Y-\%m-\%d) >> {LOG}/step04-memory-update.log 2>&1
+
+# 3) Attach 完整 daily memory 正文到 MEMORY.md（保留最近 7 天）
+3 2 * * * {CRON_USER} {PYTHON_BIN} {INSTALL_ROOT}/scripts/update_memory_md.py --mode attach --settings {SETTINGS} --date $(date -d yesterday +\%Y-\%m-\%d) >> {LOG}/step04-memory-attach.log 2>&1
+
+# 4) Session rollover（凌晨重置会话 + carryover）
+0 4 * * * {CRON_USER} {PYTHON_BIN} {INSTALL_ROOT}/scripts/session_rollover.py --settings {SETTINGS} --apply --ack SESSION_ROLLOVER >> {LOG}/step04-rollover.log 2>&1
+
+# 5) 每周记忆压缩（周日 04:30）
+30 4 * * 0 {CRON_USER} {PYTHON_BIN} {INSTALL_ROOT}/scripts/update_memory_md.py --mode compress --settings {SETTINGS} --max-chars 5000 >> {LOG}/step04-memory-compress.log 2>&1

@@ -1,0 +1,11 @@
+# run_morning_pipeline_step03 (step03 晨间 at 调度) — cron 模板
+# 安装时把 {INSTALL_ROOT}/{SETTINGS}/{LOCK}/{LOG} 替换为实际值
+# 这是三步流水线的第 2 步：在 step02 生成当日 daily 后，把非 silent 事件
+# 提交到 `at`（真实调度）。依赖 step02 流水线先完成（cron 时间相错开）。
+CRON_TZ={TIMEZONE}
+TZ={TIMEZONE}
+SHELL=/bin/bash
+PATH={PATH}
+
+# step03 晨间：每天 06:20 应用 at 级真实调度（非 stub-only）
+20 6 * * * {CRON_USER} flock -n {LOCK}/morning-step03.lock {PYTHON_BIN} {INSTALL_ROOT}/scripts/run_morning_pipeline_step03.py --date $(date +\%F) --settings {SETTINGS} --schedule-apply --require-enabled >> {LOG}/morning.log 2>&1

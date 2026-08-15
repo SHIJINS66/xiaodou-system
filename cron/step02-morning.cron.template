@@ -1,0 +1,10 @@
+# run_morning_pipeline (step02 晨间 planner) — cron 模板
+# 安装时把 {INSTALL_ROOT}/{SETTINGS}/{LOCK}/{LOG} 替换为实际值
+# 这是三步流水线的第 1 步：生成当日 daily（planner → initialize）
+CRON_TZ={TIMEZONE}
+TZ={TIMEZONE}
+SHELL=/bin/bash
+PATH={PATH}
+
+# step02 晨间：每天 06:00 生成/刷新当日计划（stub only，不真发 at）
+0 6 * * * {CRON_USER} flock -n {LOCK}/morning.lock {PYTHON_BIN} {INSTALL_ROOT}/scripts/run_morning_pipeline.py --date $(date +\%F) --settings {SETTINGS} --schedule-apply --stub-only --require-enabled >> {LOG}/morning.log 2>&1
