@@ -1,89 +1,75 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="575" viewBox="0 0 900 575" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#f7f9fc"/>
-      <stop offset="100%" stop-color="#eef1f7"/>
-    </linearGradient>
-    <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#4f8cff"/>
-      <stop offset="100%" stop-color="#3b6fe0"/>
-    </linearGradient>
-    <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#22c55e"/>
-      <stop offset="100%" stop-color="#16a34a"/>
-    </linearGradient>
-    <linearGradient id="g4" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#a855f7"/>
-      <stop offset="100%" stop-color="#9333ea"/>
-    </linearGradient>
-    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#d97706"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-opacity="0.18"/>
-    </filter>
-  </defs>
-  <rect width="900" height="575" rx="16" fill="url(#bg)"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="480" viewBox="0 0 860 480" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <!-- 背景 -->
+  <rect width="860" height="480" fill="#ffffff"/>
 
-  <!-- step02 -->
-  <rect x="40" y="60" width="300" height="110" rx="12" fill="url(#g1)" filter="url(#shadow)"/>
-  <text x="190" y="100" fill="#fff" font-size="20" font-weight="bold" text-anchor="middle">🌅 step02 · 晨间 Planner</text>
-  <text x="190" y="126" fill="#fff" font-size="13" text-anchor="middle">06:00 · 生成当天完整生活轨迹</text>
-  <text x="190" y="148" fill="#ffe9c4" font-size="12" text-anchor="middle">核心文件 + 天气 → 计划 JSON</text>
+  <!-- ===== 顶部：三步流水线 ===== -->
+  <g font-family="'PingFang SC', 'Microsoft YaHei', 'WenQuanYi Zen Hei', sans-serif">
+    <!-- step02 -->
+    <rect x="40" y="50" width="210" height="80" rx="6" fill="#f5f5f5" stroke="#333" stroke-width="1.2"/>
+    <text x="145" y="80" fill="#111" font-size="16" font-weight="bold" text-anchor="middle">STEP 02 · 晨间 Planner</text>
+    <text x="145" y="108" fill="#555" font-size="13" text-anchor="middle">生成全天生活轨迹</text>
 
-  <!-- arrow -->
-  <path d="M 340 115 L 400 115" stroke="#cbd5e1" stroke-width="3" fill="none" marker-end="url(#arr1)"/>
-  <defs><marker id="arr1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#cbd5e1"/></marker></defs>
-  <text x="370" y="105" fill="#94a3b8" font-size="11" text-anchor="middle">校验</text>
+    <!-- 箭头 -->
+    <path d="M 250 90 H 295" stroke="#777" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 
-  <!-- step03 调度 -->
-  <rect x="405" y="60" width="300" height="110" rx="12" fill="url(#g2)" filter="url(#shadow)"/>
-  <text x="555" y="98" fill="#fff" font-size="18" font-weight="bold" text-anchor="middle">📅 step03 · 真实调度</text>
-  <text x="555" y="126" fill="#fff" font-size="12" text-anchor="middle">at 定时 · 全天按点触达你</text>
-  <text x="555" y="148" fill="#d6e2ff" font-size="12" text-anchor="middle">发消息 / 自拍</text>
+    <!-- step03 -->
+    <rect x="300" y="50" width="210" height="80" rx="6" fill="#f5f5f5" stroke="#333" stroke-width="1.2"/>
+    <text x="405" y="80" fill="#111" font-size="16" font-weight="bold" text-anchor="middle">STEP 03 · 调度 + 执行</text>
+    <text x="405" y="108" fill="#555" font-size="13" text-anchor="middle">发消息 / 自拍</text>
 
-  <!-- arrow down -->
-  <path d="M 705 115 L 765 115" stroke="#cbd5e1" stroke-width="3" fill="none" marker-end="url(#arr2)"/>
-  <defs><marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 z" fill="#cbd5e1"/></marker></defs>
+    <!-- 箭头 -->
+    <path d="M 510 90 H 555" stroke="#777" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 
-  <!-- step04 -->
-  <rect x="770" y="60" width="120" height="110" rx="12" fill="url(#g4)" filter="url(#shadow)"/>
-  <text x="830" y="100" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle">🌙 step04</text>
-  <text x="830" y="124" fill="#e9d5ff" font-size="11" text-anchor="middle">日终记忆</text>
-  <text x="830" y="142" fill="#e9d5ff" font-size="11" text-anchor="middle">会话重置</text>
-
-  <!-- 角色 core 底座 -->
-  <rect x="40" y="220" width="860" height="120" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="470" y="252" fill="#475569" font-size="15" font-weight="bold" text-anchor="middle">🧬 角色由这套文件定义（换一套就是另一个角色）</text>
-  <g font-size="11.5" fill="#0f172a" text-anchor="middle">
-    <rect x="70" y="272" width="108" height="42" rx="8" fill="#fef3c7"/><text x="124" y="297">AGENTS.md</text>
-    <rect x="190" y="272" width="108" height="42" rx="8" fill="#fee2e2"/><text x="244" y="297">IDENTITY.md</text>
-    <rect x="310" y="272" width="108" height="42" rx="8" fill="#dcfce7"/><text x="364" y="297">SOUL.md</text>
-    <rect x="430" y="272" width="108" height="42" rx="8" fill="#dbeafe"/><text x="484" y="297">LIFE.md</text>
-    <rect x="550" y="272" width="108" height="42" rx="8" fill="#f3e8ff"/><text x="604" y="297">USER.md</text>
-    <rect x="670" y="272" width="108" height="42" rx="8" fill="#ccfbf1"/><text x="724" y="297">MEMORY.md</text>
-    <rect x="790" y="272" width="90" height="42" rx="8" fill="#f1f5f9"/><text x="835" y="297">TOOLS.md</text>
+    <!-- step04 -->
+    <rect x="560" y="50" width="210" height="80" rx="6" fill="#f5f5f5" stroke="#333" stroke-width="1.2"/>
+    <text x="665" y="80" fill="#111" font-size="16" font-weight="bold" text-anchor="middle">STEP 04 · 日终记忆</text>
+    <text x="665" y="108" fill="#555" font-size="13" text-anchor="middle">记忆 / 会话重置</text>
   </g>
-  <text x="470" y="332" fill="#94a3b8" font-size="11" text-anchor="middle">放在 OpenClaw workspace 根 · 与 OpenClaw 共用同一份 · 已存在的不覆盖</text>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#777"/></marker></defs>
 
-  <!-- 确定性底座 -->
-  <rect x="40" y="380" width="860" height="130" rx="12" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
-  <text x="470" y="410" fill="#475569" font-size="14" font-weight="bold" text-anchor="middle">🛠️ 每一步都是确定性工程，不靠模型“大概”</text>
-  <g font-size="12" fill="#334155" text-anchor="middle">
-    <text x="170" y="445">📋 JSON schema 校验</text>
-    <text x="400" y="445">🔒 幂等门 + flock 锁</text>
-    <text x="630" y="445">📜 状态回写 + 日志</text>
-    <text x="170" y="472">🧯 有限重试 + 超时兜底</text>
-    <text x="400" y="472">🗂️ 备份 / 镜像 / 校验</text>
-    <text x="630" y="472">🌐 复用 OpenClaw</text>
+  <!-- ===== 底座 1：角色定义 ===== -->
+  <g font-family="'PingFang SC', 'Microsoft YaHei', sans-serif">
+    <rect x="40" y="190" width="780" height="86" rx="6" fill="#fafafa" stroke="#ccc" stroke-width="1"/>
+    <text x="430" y="216" fill="#333" font-size="13" font-weight="bold" text-anchor="middle">角色由 workspace 根目录这套文件定义（换一套 = 另一个角色）</text>
+    <g font-size="12" fill="#444" text-anchor="middle">
+      <rect x="80" y="232" width="96" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="128" y="251">AGENTS.md</text>
+      <rect x="188" y="232" width="96" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="236" y="251">IDENTITY.md</text>
+      <rect x="296" y="232" width="96" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="344" y="251">SOUL.md</text>
+      <rect x="404" y="232" width="96" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="452" y="251">LIFE.md</text>
+      <rect x="512" y="232" width="96" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="560" y="251">USER.md</text>
+      <rect x="620" y="232" width="96" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="668" y="251">MEMORY.md</text>
+      <rect x="728" y="232" width="70" height="30" rx="4" fill="#fff" stroke="#bbb" stroke-width="0.8"/><text x="763" y="251">TOOLS.md</text>
+    </g>
   </g>
-  <rect x="40" y="488" width="860" height="1.5" fill="#e2e8f0"/>
-  <text x="470" y="512" fill="#475569" font-size="12.5" font-weight="bold" text-anchor="middle">外部依赖，全部通过 provider 抽象接入</text>
-  <g font-size="12" fill="#334155" text-anchor="middle">
-    <rect x="150" y="524" width="120" height="26" rx="13" fill="#eef2ff"/><text x="210" y="541">🧠 DeepSeek</text>
-    <rect x="290" y="524" width="130" height="26" rx="13" fill="#fce7f3"/><text x="355" y="541">🎨 Seedream 生图</text>
-    <rect x="440" y="524" width="130" height="26" rx="13" fill="#e0f2fe"/><text x="505" y="541">💬 Telegram</text>
-    <rect x="590" y="524" width="150" height="26" rx="13" fill="#ecfdf5"/><text x="665" y="541">⚙️ OpenClaw gateway</text>
+
+  <!-- 连接线 -->
+  <path d="M 145 130 V 190" stroke="#ccc" stroke-width="1.2" fill="none"/>
+  <path d="M 665 130 V 190" stroke="#ccc" stroke-width="1.2" fill="none"/>
+
+  <!-- ===== 底座 2：确定性工程 ===== -->
+  <g font-family="'PingFang SC', 'Microsoft YaHei', sans-serif">
+    <rect x="40" y="310" width="780" height="54" rx="6" fill="#fafafa" stroke="#ccc" stroke-width="1"/>
+    <text x="430" y="336" fill="#333" font-size="13" font-weight="bold" text-anchor="middle">确定性工程</text>
+    <g font-size="12" fill="#555" text-anchor="middle">
+      <text x="180" y="352">JSON schema 校验</text>
+      <text x="330" y="352">幂等门 + flock 锁</text>
+      <text x="470" y="352">状态回写 + 日志</text>
+      <text x="610" y="352">备份 / 镜像 / 校验</text>
+    </g>
+  </g>
+
+  <!-- ===== 底部：providers ===== -->
+  <g font-family="'PingFang SC', 'Microsoft YaHei', sans-serif">
+    <text x="430" y="404" fill="#333" font-size="13" font-weight="bold" text-anchor="middle">外部依赖（通过 provider 抽象接入）</text>
+    <g font-size="12" fill="#555" text-anchor="middle">
+      <text x="180" y="436">DeepSeek</text>
+      <text x="330" y="436">Seedream 生图</text>
+      <text x="470" y="436">Telegram</text>
+      <text x="620" y="436">OpenClaw gateway</text>
+    </g>
+    <line x1="120" y1="428" x2="240" y2="428" stroke="#ddd" stroke-width="0.8"/>
+    <line x1="280" y1="428" x2="380" y2="428" stroke="#ddd" stroke-width="0.8"/>
+    <line x1="420" y1="428" x2="520" y2="428" stroke="#ddd" stroke-width="0.8"/>
+    <line x1="560" y1="428" x2="680" y2="428" stroke="#ddd" stroke-width="0.8"/>
   </g>
 </svg>
