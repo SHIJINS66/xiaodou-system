@@ -1,13 +1,42 @@
 # xiaodou-system
 
+> **A persona-agnostic runtime framework for companion agents — letting an AI character that "lives its own life, reaches out proactively, and remembers every moment between you" truly run autonomously over the long term.**
+
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Linux-blue" alt="platform"/>
   <img src="https://img.shields.io/github/v/release/SHIJINS66/xiaodou-system?color=green&label=release" alt="release"/>
   <img src="https://img.shields.io/badge/channel-Telegram-lightgrey" alt="channel"/>
-  <img src="https://img.shields.io/badge/docs-简体中文-blue?label=%E4%B8%AD%E6%96%87" alt="docs-zh"/>
+  <img src="https://img.shields.io/github/stars/SHIJINS66/xiaodou-system?color=yellow" alt="stars"/>
   <a href="README.md"><img src="https://img.shields.io/badge/lang-简体中文-blue" alt="lang-zh"/></a>
-  <img src="https://img.shields.io/badge/lang-English-brightgreen" alt="lang-en"/>
 </p>
+
+<div align="center">
+
+| | |
+|---|---|
+| Three-Layer Deterministic Pipeline | Morning planning · Timely outreach · Day-end memory |
+| Persona–System Decoupling | Swap one set of core files → an entirely different character |
+| Deterministic Engineering | Schema validation · idempotency gates · file locks · state write-back |
+| Ready to Use | One-shot setup wizard + complete release package |
+
+</div>
+
+---
+
+## Table of Contents
+
+- [Abstract](#abstract)
+- [I. Background and Motivation](#i-background-and-motivation)
+- [II. Significance and Value](#ii-significance-and-value)
+- [III. System Architecture](#iii-system-architecture)
+- [IV. Demonstration](#iv-demonstration)
+- [V. Deployment](#v-deployment)
+- [VI. Directory Structure](#vi-directory-structure)
+- [VII. Current Limitations and Roadmap](#vii-current-limitations-and-roadmap)
+- [VIII. Conclusion](#viii-conclusion)
+- [License](#license)
+
+---
 
 ## Abstract
 
@@ -70,6 +99,12 @@ The system deliberately strips out everything tied to a specific persona, scenar
 The system comprises **three serial business pipelines** and a **persistent layer running throughout**, with external dependencies uniformly integrated through an abstraction layer.
 
 ### 3.2 The Three-Layer Business Pipeline
+
+| Stage | Responsibility | Output |
+|---|---|---|
+| **step02 · Daily Planning** | Reads core files & weather, generates the full-day life trajectory | Validated daily plan |
+| **step03 · Scheduling & Execution** | Submits events to `at`, executes the outreach chain on trigger | Delivered messages / selfies |
+| **step04 · Day-End Memory** | Consolidates chat & events, deposits long-term memory, resets session | Fused memory / session carryover |
 
 - **step02 · Daily Planning**: Reads the persona's core files and daily weather to generate a full day's life trajectory — including activities, locations, emotional states, and available interaction windows; the output is validated against a JSON Schema and persisted, retried on failure, eliminating randomness at generation time.
 - **step03 · Scheduling & Execution**: Submits the "non-silent" events requiring proactive outreach to the operating-system-level `at` timer; when a trigger fires, it executes the full outreach chain — sensing the user's availability, generating an adapted message, synthesizing a selfie via the image service when needed, delivering through the message channel, and finally writing the result back to the day's journal.
