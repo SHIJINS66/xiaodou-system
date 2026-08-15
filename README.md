@@ -1,18 +1,43 @@
-# companion-framework
+# 🧸 xiaodou-system
 
-一个"陪伴式 agent"的**可打包、可复用的运行框架**。把一套高度绑定具体角色与场景的
-自动生活规划 / 主动消息 / 记忆系统，提炼成一套**角色无关**的运行框架：
-
-- **核心文件**：由 OpenClaw workspace 根目录的 `AGENTS.md` / `IDENTITY.md` / `SOUL.md` /
-  `LIFE.md` / `USER.md` / `TOOLS.md` / `MEMORY.md` 提供——这正是 OpenClaw 启动时默认读取的
-  文件，框架与 OpenClaw **共用同一份**，不另建重复目录。
-- **调用模型的 prompt**：planner / decision / message / memory 四份 prompt 高度通用，
-  已内置，用户不用填。
-- **step 系统**：每日规划 → 校验 → 调度 → 执行 → 记忆整理的确定性工程师托脚本与配置。
-
-> 只保证在**与你线上相同的 Linux + OpenClaw** 环境可迁移，不追求跨平台万能。
+> 一套「陪伴式 AI 角色」的**可打包、可复用运行框架** —— 把自动生活规划、主动消息、日终自记忆,
+> 提炼成 **角色无关** 的确定性流水线,基于 [OpenClaw](https://docs.openclaw.ai) 运行。
 
 ---
+
+## 这是什么
+
+把你想象中「会自己生活、会主动找你聊天、会记得你们之间的点点滴滴」的 AI 角色,**真正跑起来**:
+
+- 🌅 **晨间** —— 自动生成一整天的生活轨迹(情绪 / 地点 / 活动 / 状态)
+- 📨 **随时** —— 在合理窗口主动给你发消息、发自拍,工作忙时自动降低打扰
+- 🌙 **日终** —— 把一天的聊天整理成融合式记忆,长期保存到 `MEMORY.md`,凌晨自动重置会话
+- 🔄 **完整闭环** —— 生成 → 校验 → 调度(`at`)→ 执行发送 → 记忆,全是确定性脚本,不靠手工
+
+角色本身由 OpenClaw workspace 根目录的 `AGENTS.md` / `IDENTITY.md` / `SOUL.md` / `LIFE.md` /
+`USER.md` / `TOOLS.md` / `MEMORY.md` 定义——**换一套文件就是另一个角色**,框架完全不认死。
+
+## 为什么会有它
+
+它源自一个线上长期运行的「小豆」陪伴系统。这个仓库把这个系统里**绑定具体角色与场景**的部分
+全部剥离,留下**通用、可复用、可搬家**的三层流水线(step02 / 03 / 04),任何人都能拿它搭自己的角色。
+
+> 只保证在**与你线上相同的 Linux + OpenClaw** 环境可迁移,不追求跨平台万能。
+
+## 架构总览
+
+```
+┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│  step02      │ →  │  step03      │ →  │  step03      │ →  │  step04      │
+│  晨间 Planner │    │  校验+调度    │    │  执行+发送    │    │  日终记忆    │
+│  (生成计划)   │    │  (at 提交)   │    │  (消息/自拍)  │    │  (记忆+重置) │
+└─────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
+      ① 每天 06:00      ② 每天 06:20        ③ 全天随机触发      ④ 每天 00:20–04:30
+```
+
+- **核心文件**:与 OpenClaw **共用同一份** workspace 根 prompt 文件,不另建重复目录。
+- **调用模型的 prompt**:planner / decision / message / memory 四份高度通用,已内置。
+- **确定性工程**:每步有 JSON schema 校验、幂等门、flock 锁、日志与状态回写,不靠模型硬撑。
 
 ## 快速开始（新环境部署）
 
@@ -46,8 +71,8 @@ openclaw configure
 ### 2. 初始化 instance
 
 ```bash
-git clone <your-repo-url> companion-framework
-cd companion-framework
+git clone https://github.com/SHIJINS66/xiaodou-system.git
+cd xiaodou-system
 bash init.sh
 ```
 
@@ -145,14 +170,16 @@ OpenClaw 启动时自动读取它们。init.sh 已把模板复制到位，你只
 
 ## 发展状态
 
-### 已完成（三步流水线全量等价迁移）
+### 已真实环境验证(fw-test 纯普通用户端到端)
 
 - [x] **step02** 晨间 planner 骨架（planner → initialize daily）
-- [x] **step03** at 调度 + 执行器（validate → schedule → execute → inject → delivery）
-- [x] **step04** 夜间记忆闭环（finalize → 长期记忆更新 → 会话 rollover → 记忆压缩）
+- [x] **step03** at 调度 + 执行器（validate → schedule → execute → inject → delivery → 真实 Telegram 发送）
+- [x] **step04** 夜间记忆闭环（finalize → 长期记忆更新 → 会话 rollover → 记忆压缩 → 真实 DeepSeek 生成 + backup 归档）
 - [x] P1 去痕迹 + cron 模板（step02/03/04）+ init.sh + 部署向导 `guided_setup.py`
 - [x] 运行规则模板层（AGENTS.md，含主动发图片/自拍/记忆/搜索机制）
 - [x] 隔离环境逻辑验证（独立 venv 零本机依赖：编译 / import / cron / marker 解析 / reconcile）
+- [x] 普通用户 cron 双形态（root 系统 crontab / 普通用户 crontab）
+- [x] 部署向导配对自动获取 chat id（普通用户无需手动填）
 
 ### step04 夜间记忆包含什么
 
@@ -166,10 +193,12 @@ OpenClaw 启动时自动读取它们。init.sh 已把模板复制到位，你只
 
 对应 cron：`finalize (00:20/00:50)` → `incremental (02:00)` → `attach (02:03)` → `rollover (04:00)` → `compress (周日 04:30)`
 
-### 待真实环境端到端验证
+### 待办
 
-- [ ] 真实 provider 端到端：目前用 stub delivery 验证逻辑链路，真实 LLM + Telegram 发送 + gateway 注入 + 夜间编排的 --apply 落地，尚未在新环境跑通一遍
+- 触发式 cron 采用普通用户 atd 时的调度优化
+- 更多角色 prompt 内置样例
+- Lint / CI 接入
 
 ## License
 
-MIT © companion-framework
+MIT © xiaodou-system

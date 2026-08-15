@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# companion-framework 打包脚本
+# xiaodou-system 打包脚本
 # 把仓库打成可分发的 tar.gz（排除实例/密钥/缓存/临时文件），
 # 并做发布前完整性自检（含敏感信息扫描，防止 key 泄漏进包）。
 #
@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
 OUT_DIR="${OUT_DIR:-$ROOT/dist}"
-PKG_NAME="companion-framework-$(date +%Y%m%d-%H%M%S)"
+PKG_NAME="xiaodou-system-$(date +%Y%m%d-%H%M%S)"
 ONLY_CHECK=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
