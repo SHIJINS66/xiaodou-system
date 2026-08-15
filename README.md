@@ -1,5 +1,12 @@
 # xiaodou-system
 
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Linux-blue" alt="platform"/>
+  <img src="https://img.shields.io/github/v/release/SHIJINS66/xiaodou-system?color=green&label=release" alt="release"/>
+  <img src="https://img.shields.io/github/downloads/SHIJINS66/xiaodou-system/total?color=orange" alt="downloads"/>
+  <img src="https://img.shields.io/badge/channel-Telegram-lightgrey" alt="channel"/>
+</p>
+
 ## 摘要
 
 本文档提出并实现一套**角色无关**的「陪伴式智能体」运行框架。它将以下能力组织为一条确定性的每日流水线：自动生成角色的生活轨迹、在合理时机主动向用户推送消息与照片、以及在日终将一天的对话整理为长期记忆。框架不依赖预置的对话脚本，而是由用户在 workspace 中定义的一组核心文件驱动，因此**更换一组文件即可得到完全不同的角色**，可被自由复用与二次开发。
@@ -75,6 +82,8 @@
 ---
 
 ## 快速开始（新环境部署）
+
+> 最新发布包可在 [GitHub Releases](https://github.com/SHIJINS66/xiaodou-system/releases) 直接下载，解压后按下方步骤部署；也可以直接 `git clone` 本仓库。
 
 前置依赖（与线上一致的环境）：
 
