@@ -17,7 +17,7 @@
 下图展示了本框架在**正常运行状态下**的实际运行效果，角色基于自己的生活轨迹主动发起日常对话、并在合适时机分享照片与自拍：
 
 <p align="center">
-  <img src="docs/screenshot-telegram.jpg" alt="正常运行状态下的 Telegram 对话效果" width="760"/>
+  <img src="docs/screenshot-telegram.jpg" alt="正常运行状态下的 Telegram 对话效果" width="800"/>
   <br/>
   <em>图 1：正常运行状态下，角色自主生成并发送的 Telegram 日常对话与自拍</em>
 </p>
