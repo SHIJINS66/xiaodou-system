@@ -92,6 +92,31 @@ Four principles run through the entire pipeline and together ensure predictabili
 
 Interactions with language models, image generation, message channels, and the OpenClaw gateway are uniformly encapsulated in the `providers/` abstraction layer, so swapping model suppliers, adding message channels, or integrating a new gateway becomes a localized change rather than a structural one.
 
+### 3.6 The Development Process: Rebuilt from OpenClaw
+
+This framework was not written from scratch. Instead, it was **rebuilt step by step on top of OpenClaw, a general-purpose agent runtime, by supplementing the deterministic scheduling and memory operations that a companion system requires**. Understanding this journey helps users see which capabilities OpenClaw provides natively and which this framework adds — so it is easier to reason about usage and further development.
+
+**What OpenClaw provides natively**
+
+OpenClaw is a general-purpose agent runtime. This framework reuses several of its capabilities:
+
+- **A persistent agent**: a set of Markdown files in the workspace (e.g., `MEMORY.md` for long-term memory, `memory/` for dated notes) carry the agent's identity, rules, and memory; they load automatically on session start, and the model only remembers what has been written to disk — no hidden state;
+- **Session and gateway lifecycle**: session creation, history reading, and message injection (`chat.inject`) are all managed by the OpenClaw gateway, so the framework does not need to build its own session management;
+- **Channel integration**: message channels such as Telegram and model providers such as DeepSeek can be configured natively by OpenClaw.
+
+**What this framework adds on top**
+
+OpenClaw is generative and responsive: it replies, but it will not proactively, on its own schedule, run a day and reach out to the user; and it relies on the model's incidental output, lacking strong deterministic operations. These are exactly the gaps this framework fills:
+
+- **Proactivity**: OpenClaw has no "generate today's life trajectory each morning and proactively reach out at the right time" capability. The framework adds the step02 daily planner (reads core files and weather to produce a full-day trajectory) and, via step03, submits events to the operating-system `at` timer — achieving genuinely autonomous outreach;
+- **Determinism**: Native agent sessions are driven by model generation. The framework wraps them in a layer of deterministic engineering — JSON Schema contract validation, idempotency gates (the same event is never delivered twice), file locks (flock to prevent concurrent corruption), and state write-back with audit—turning these risky steps from "left to the model" into "handled by scripts";
+- **Memory deepening (Continuity)**: OpenClaw provides the `MEMORY.md / memory/` memory framework, but has no built-in schedule for "daily consolidate conversations into a fused memory and periodically deduplicate/compress". The framework's step04 takes over this process with deterministic scripts, and the setup wizard automatically disables OpenClaw's native memory writer to avoid two write paths conflicting;
+- **Integration approach**: the framework reuses the OpenClaw gateway through the `providers/` abstraction layer — reading session history, resolving the sessionId, and injecting proactive messages via `chat.inject` — while also bringing model calls (DeepSeek) and image generation (Seedream) into the same abstraction so external dependencies are replaceable local pieces rather than structural coupling.
+
+**The essence of the rebuild**
+
+If OpenClaw is like the brain and nervous system that "thinks and converses," then what this framework adds is the daily rhythm and deterministic skeleton that "lives, remembers, and proactively reaches out at the right time." The core of the rebuild is not rewriting conversational ability, but **layering a deterministic scheduling-and-memory engineering shell on top of a generative runtime** — so an agent can truly run day after day in a predictable, recoverable way.
+
 ---
 
 ## IV. Demonstration
