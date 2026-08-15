@@ -108,11 +108,13 @@ OpenClaw is a general-purpose agent runtime. This framework reuses several of it
 
 **What this framework adds on top**
 
-OpenClaw is generative and responsive: it replies, but it will not proactively, on its own schedule, run a day and reach out to the user; and it relies on the model's incidental output, lacking strong deterministic operations. These are exactly the gaps this framework fills:
+OpenClaw is generative and responsive: it replies, but it will not proactively, on its own schedule, run a day and reach out to the user; and it relies on the model's incidental output, lacking strong deterministic operations. These are exactly the gaps this framework fills. During development we also uncovered several concrete limitations of OpenClaw and addressed each with a systematic change:
 
-- **Proactivity**: OpenClaw has no "generate today's life trajectory each morning and proactively reach out at the right time" capability. The framework adds the step02 daily planner (reads core files and weather to produce a full-day trajectory) and, via step03, submits events to the operating-system `at` timer — achieving genuinely autonomous outreach;
+- **Limited proactivity: heartbeat is constrained and uncontrollable.** OpenClaw's built-in heartbeat mechanism can only wake the model within a single session — it cannot span sessions or fire at a chosen time in a predictable rhythm, so it cannot proactively reach the user at a specific moment. This framework therefore does not rely on heartbeat to drive proactive behavior; instead it orchestrates step02 / step03 / step04 with operating-system-level `cron` (fixed-time triggers) and `at` (one-shot timers), turning proactivity from "the model happens to wake" into "a deterministic system rhythm";
+- **Proactivity**: on top of that scheduling, this framework adds the step02 daily planner (reads core files and weather to produce a full-day trajectory) and, via step03, submits events to the operating-system `at` timer — achieving genuinely autonomous outreach;
 - **Determinism**: Native agent sessions are driven by model generation. The framework wraps them in a layer of deterministic engineering — JSON Schema contract validation, idempotency gates (the same event is never delivered twice), file locks (flock to prevent concurrent corruption), and state write-back with audit—turning these risky steps from "left to the model" into "handled by scripts";
-- **Memory deepening (Continuity)**: OpenClaw provides the `MEMORY.md / memory/` memory framework, but has no built-in schedule for "daily consolidate conversations into a fused memory and periodically deduplicate/compress". The framework's step04 takes over this process with deterministic scripts, and the setup wizard automatically disables OpenClaw's native memory writer to avoid two write paths conflicting;
+- **Unstructured, ever-growing memory**: OpenClaw's memory writes and dream (recall) mechanism add some value, but in the long run it keeps writing into the same `MEMORY.md`, which only grows monotonically — piling up without organization and never converging. The framework's step04 takes this over with deterministic scripts, structuring memory into layers (daily Fused Memory → incremental merge → weekly LLM dedup/compress rewrite) and keeping the body size bounded (≤5000 chars), so long-term memory is a tidy, growing asset rather than an endlessly accumulating dump;
+- **Visibility of proactive injections — letting the model see what it said**: OpenClaw's proactive message injection (`chat.inject`) does not, by default, necessarily return the persona's own just-sent messages into the session context; without handling this, the model may not see its own prior proactive outreach when woken, breaking the continuity between its words and memory. The framework writes the actual sent text, event type, scene, and image path back into the session history on the same injection path, so the model can fully see what it proactively said and why on the next wake — keeping its behavior and memory coherent;
 - **Integration approach**: the framework reuses the OpenClaw gateway through the `providers/` abstraction layer — reading session history, resolving the sessionId, and injecting proactive messages via `chat.inject` — while also bringing model calls (DeepSeek) and image generation (Seedream) into the same abstraction so external dependencies are replaceable local pieces rather than structural coupling.
 
 **The essence of the rebuild**
@@ -144,27 +146,6 @@ As the framework runs, every experience is automatically persisted to files: `da
   <br/>
   <em>Fig. 2-b: The auto-persisted daily / chatlog / daily_selfies data directories</em>
 </p>
-
-Taking a natural day as an example, the system runs automatically along the following timeline (the persona's tone and topics are determined by the core files and that day's life trajectory; the framework is responsible only for reaching out at the right time in the right way):
-
-```text
-06:00  step02 · Daily Planning
-        └─ Read core files and weather → generate the day's life trajectory
-           ↓  Validated against JSON Schema and persisted; retry on failure
-
-06:20  step03 · Scheduling
-        └─ Submit "non-silent" events to the at timer
-
-(example; exact times set by the plan) step03 · Execution & Outreach
-        └─ Sense availability → generate message → synthesize selfie if needed → send via Telegram → write back
-
-00:20 / 00:50  step04 · Day-end memory finalize (twice, fault-tolerant retry)
-02:00          step04 · Long-term memory incremental / attach
-04:00          step04 · Session rollover
-Sun 04:30      step04 · Weekly compress (LLM rewrites the top of MEMORY.md)
-```
-
-Every step is implemented by deterministic scripts, backed by contract validation, idempotency gates, file locks, and state write-back — never by the model's incidental output.
 
 ---
 
