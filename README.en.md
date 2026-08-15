@@ -207,9 +207,10 @@ The wizard walks through the full chain in order:
 >
 > `--non-interactive` uses defaults (CI / scripting); `--verify-only` runs only the final validation.
 
-### 5.5 Step 4: Install Scheduled Tasks (Required)
+### 5.5 Step 4: Install Scheduled Tasks
 
-> **This step is not optional — it is required.** The framework's autonomy depends entirely on scheduling: step02 (daily planning) and step04 (day-end memory) are both triggered by cron, and step03 relies on `at` for its one-shot execution. **Without installing the scheduled tasks, none of the three pipelines will ever run automatically**, and the system cannot run a day on its own.
+The framework's autonomy depends on scheduling, so the three pipelines' tasks need to be installed into the system timers:
+(step02 and step04 are triggered by cron, while step03 relies on `at` for one-shot execution; once installed, the system can automatically generate a plan, reach out proactively, and sediment memory every day.)
 
 ```bash
 bash init.sh --instance-dir ./instance --install-cron

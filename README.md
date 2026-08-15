@@ -206,9 +206,10 @@ python3 scripts/guided_setup.py
 >
 > `--non-interactive` 走默认值（CI / 脚本化）；`--verify-only` 仅执行最终校验。
 
-### 5.5 第四步：安装定时任务（必需）
+### 5.5 第四步：安装定时任务
 
-> **这一步不是可选的，必须执行。** 本框架的自主运行完全依赖定时调度——step02（生成计划）与 step04（日终记忆）都由 cron 定时触发，step03 依赖 `at` 到点执行。**不安装定时任务，这三条流水线就永远不会自动运行**，系统也就无法自主经营一天。
+framework 的自主运行依赖定时调度，因此需将三条流水线的任务安装到系统定时器：
+（step02 与 step04 由 cron 定时触发，step03 依赖 `at` 到点执行；安装后系统即可每日自主生成计划、主动触达并沉淀记忆。）
 
 ```bash
 bash init.sh --instance-dir ./instance --install-cron
