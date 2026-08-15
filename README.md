@@ -1,42 +1,11 @@
 # xiaodou-system
 
-> **角色无关的陪伴式智能体运行框架 —— 让一个“会自己生活、主动对话、记住你们之间点滴”的 AI 角色,真正长期自动地运行起来。**
-
 <p align="center">
   <img src="https://img.shields.io/badge/platform-Linux-blue" alt="platform"/>
   <img src="https://img.shields.io/github/v/release/SHIJINS66/xiaodou-system?color=green&label=release" alt="release"/>
   <img src="https://img.shields.io/badge/channel-Telegram-lightgrey" alt="channel"/>
-  <img src="https://img.shields.io/github/stars/SHIJINS66/xiaodou-system?color=yellow" alt="stars"/>
   <a href="README.en.md"><img src="https://img.shields.io/badge/lang-English-blue" alt="lang-en"/></a>
 </p>
-
-<div align="center">
-
-| | |
-|---|---|
-| 三层确定性流水线 | 晨间规划 · 适时触达 · 日终记忆 |
-| 角色与系统解耦 | 换一套核心文件,即可得到另一个角色 |
-| 确定性工程 | Schema 校验 · 幂等门 · 文件锁 · 状态回写 |
-| 开箱即用 | 部署向导一步到位,附完整发布包 |
-
-</div>
-
----
-
-## 目录
-
-- [摘要](#摘要)
-- [一、研究背景与立项动机](#一研究背景与立项动机)
-- [二、研究意义与价值](#二研究意义与价值)
-- [三、系统架构](#三系统架构)
-- [四、效果演示](#四效果演示)
-- [五、部署方式](#五部署方式)
-- [六、目录结构](#六目录结构)
-- [七、当前不足与未来规划](#七当前不足与未来规划)
-- [八、总结](#八总结)
-- [License](#license)
-
----
 
 ## 摘要
 
@@ -99,12 +68,6 @@
 系统由**三条串行的业务流水线**与一个**贯穿始终的持久层**构成，外部依赖统一经抽象层接入。
 
 ### 3.2 三层业务流水线
-
-| 阶段 | 职责 | 产出 |
-|---|---|---|
-| **step02 · 每日规划** | 读取核心文件与天气,生成全天生活轨迹 | 校验后的当日计划 |
-| **step03 · 调度与执行** | 提交事件到 `at`,到点执行触达链路 | 送达的消息 / 自拍 |
-| **step04 · 日终记忆** | 汇总对话与事件,沉淀长期记忆,重置会话 | 融合式记忆 / 会话承接 |
 
 - **step02 · 每日规划**：读取角色的核心文件与当日气象信息，生成一整天的生活轨迹 —— 包含活动安排、地点、情绪状态与可供触达的交互窗口；输出经 JSON Schema 校验后落盘，不合格则重试，杜绝生成阶段的偶然性。
 - **step03 · 调度与执行**：将规划中需要主动触达用户的「非静默」事件提交至操作系统级定时器 `at`；到达触发点后执行完整触达链路 —— 判断用户忙闲状态、生成适配文案、在需要时调用图像服务合成自拍、经消息通道发送，最后将结果回写当日档案。
