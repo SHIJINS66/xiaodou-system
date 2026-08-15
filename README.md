@@ -62,7 +62,7 @@
 ### 3.1 总体设计
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="xiaodou-system 架构图" width="880"/>
+  <img src="docs/architecture.png" alt="xiaodou-system 架构图" width="880"/>
   <br/>
   <em>图 1：系统总体架构 —— 三层业务流水线与贯穿始终的持久层</em>
 </p>

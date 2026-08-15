@@ -64,7 +64,7 @@ The system deliberately strips out everything tied to a specific persona, scenar
 ### 3.1 Overall Design
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="xiaodou-system architecture" width="880"/>
+  <img src="docs/architecture.png" alt="xiaodou-system architecture" width="880"/>
   <br/>
   <em>Fig. 1: Overall system architecture — three-layer business pipeline with a persistent layer running throughout</em>
 </p>
