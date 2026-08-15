@@ -63,6 +63,8 @@
 
 <p align="center">
   <img src="docs/architecture.svg" alt="xiaodou-system 架构图" width="880"/>
+  <br/>
+  <em>图 1：系统总体架构 —— 三层业务流水线与贯穿始终的持久层</em>
 </p>
 
 系统由**三条串行的业务流水线**与一个**贯穿始终的持久层**构成，外部依赖统一经抽象层接入。
@@ -124,7 +126,7 @@ OpenClaw 是生成式、响应式的：它会回应，但不会主动、定时�
 <p align="center">
   <img src="docs/screenshot-telegram.jpg" alt="正常运行状态下的 Telegram 对话效果" width="800"/>
   <br/>
-  <em>图 1：正常运行状态下，角色自主生成并发送的 Telegram 日常对话与自拍</em>
+  <em>图 2：正常运行状态下，角色自主生成并发送的 Telegram 日常对话与自拍</em>
 </p>
 
 以一个自然日为例，系统按下列时间线自动运转（角色语气与话题由核心文件与当天生活轨迹决定，框架仅负责在正确的时间以正确的方式触达）：

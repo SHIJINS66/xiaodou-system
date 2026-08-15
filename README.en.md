@@ -65,6 +65,8 @@ The system deliberately strips out everything tied to a specific persona, scenar
 
 <p align="center">
   <img src="docs/architecture.svg" alt="xiaodou-system architecture" width="880"/>
+  <br/>
+  <em>Fig. 1: Overall system architecture — three-layer business pipeline with a persistent layer running throughout</em>
 </p>
 
 The system comprises **three serial business pipelines** and a **persistent layer running throughout**, with external dependencies uniformly integrated through an abstraction layer.
@@ -126,7 +128,7 @@ The figure below shows the framework in **normal operation**: the persona autono
 <p align="center">
   <img src="docs/screenshot-telegram.jpg" alt="Telegram conversations in normal operation" width="800"/>
   <br/>
-  <em>Fig. 1: Telegram conversations and selfies autonomously generated and sent by the persona in normal operation</em>
+  <em>Fig. 2: Telegram conversations and selfies autonomously generated and sent by the persona in normal operation</em>
 </p>
 
 Taking a natural day as an example, the system runs automatically along the following timeline (the persona's tone and topics are determined by the core files and that day's life trajectory; the framework is responsible only for reaching out at the right time in the right way):
