@@ -1,0 +1,19 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object",
+  "required":["schema_version","date","phase","created_at","updated_at","history","state_path"],
+  "properties":{
+    "schema_version":{"const":"1.0"},
+    "date":{"type":"string","format":"date"},
+    "phase":{"enum":["new","blocked_finalization","blocked_active_run","carryover_ready","reset_intent","reset_succeeded","reset_unknown","verification_failed","completed"]},
+    "created_at":{"type":"string","format":"date-time"},
+    "updated_at":{"type":"string","format":"date-time"},
+    "history":{"type":"array"},
+    "state_path":{"type":"string","minLength":1},
+    "old_session_id":{"type":"string"},
+    "new_session_id":{"type":"string"},
+    "carryover":{"type":"object"},
+    "receipt":{"type":"object"},
+    "error":{"type":["string","null"]}
+  }
+}

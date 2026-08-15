@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xiaodou.local/schemas/runtime_decision_v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["action", "reason", "delay_minutes", "adjustments", "runtime_event"],
+  "properties": {
+    "action": {"enum": ["execute", "adjust", "delay", "cancel", "add_runtime_event"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "delay_minutes": {"type": ["integer", "null"], "minimum": 5, "maximum": 120},
+    "adjustments": {"type": ["object", "null"], "additionalProperties": false, "properties": {"intent": {"type": "string", "maxLength": 200}, "topic_seed": {"type": "string", "maxLength": 240}, "reply_pressure": {"enum": ["none", "low", "normal"]}}},
+    "runtime_event": {"type": ["object", "null"]}
+  },
+  "allOf": [
+    {"if": {"properties": {"action": {"const": "delay"}}, "required": ["action"]}, "then": {"properties": {"delay_minutes": {"type": "integer"}}}, "else": {"properties": {"delay_minutes": {"type": "null"}}}},
+    {"if": {"properties": {"action": {"const": "adjust"}}, "required": ["action"]}, "then": {"properties": {"adjustments": {"type": "object"}}}, "else": {"properties": {"adjustments": {"type": "null"}}}},
+    {"if": {"properties": {"action": {"const": "add_runtime_event"}}, "required": ["action"]}, "then": {"properties": {"runtime_event": {"type": "object"}}}, "else": {"properties": {"runtime_event": {"type": "null"}}}}
+  ]
+}

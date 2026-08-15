@@ -1,0 +1,35 @@
+# 实例目录（由 init.sh 生成，不入库）
+/instance/
+/instance_*/
+
+# 密钥与本地状态
+.env
+.env.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行时生成物（daily / chatlog / 自拍 / 日志 / 锁）
+daily/
+chatlog/
+daily_selfies/
+logs/
+state/
+assets/character/*.!(*.md)   # 参考图不入库（用户自己的）
+
+# 打包产物
+dist/
+*.tar.gz
+*.tgz
+
+# 内部迁移/去标审计文档（含线上路径与真实 chat id，不入公开仓库）
+MIGRATION_AUDIT_FULL.md
+MIGRATION_CHECKLIST.md
+HARDCODE_AUDIT.md
+P1_DEIDENTIFY.md

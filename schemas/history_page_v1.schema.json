@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["page","offset","count","sha256"],"properties":{"page":{"type":"integer","minimum":1},"offset":{"type":["integer","null"],"minimum":0},"count":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"}}}

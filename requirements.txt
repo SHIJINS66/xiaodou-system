@@ -1,0 +1,3 @@
+# companion-framework 运行依赖（Python 3.10+）
+PyYAML>=6.0
+openai>=1.30.0

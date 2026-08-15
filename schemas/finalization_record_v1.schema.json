@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "date",
+    "run_id",
+    "phase",
+    "source_fingerprint",
+    "created_at",
+    "updated_at",
+    "history"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "phase": {
+      "enum": [
+        "new",
+        "acquired",
+        "deferred_running_event",
+        "chatlog_written",
+        "memory_ready",
+        "mirrored",
+        "backup_intent",
+        "backup_failed",
+        "backup_unknown",
+        "completed",
+        "raw_backup_intent",
+        "raw_backup_failed",
+        "raw_backup_ready",
+        "memory_pending"
+      ]
+    },
+    "source_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "history": {
+      "type": "array"
+    }
+  }
+}

@@ -1,0 +1,503 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xiaodou.local/schemas/daily_planner_output_v1_1.schema.json",
+  "title": "护卫每日 Planner 输出 v1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "date",
+    "timezone",
+    "day_context",
+    "interaction_budget",
+    "timeline",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.1"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "timezone": {
+      "const": "Asia/Shanghai"
+    },
+    "day_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "day_type",
+        "workload",
+        "health_state",
+        "weather_summary",
+        "day_theme",
+        "exception_reason"
+      ],
+      "properties": {
+        "day_type": {
+          "enum": [
+            "workday",
+            "weekend",
+            "holiday",
+            "leave",
+            "travel",
+            "sick"
+          ]
+        },
+        "workload": {
+          "enum": [
+            "light",
+            "normal",
+            "busy",
+            "month_end",
+            "quarter_end",
+            "year_end",
+            "overtime"
+          ]
+        },
+        "health_state": {
+          "enum": [
+            "normal",
+            "tired",
+            "menstrual_mild",
+            "unwell"
+          ]
+        },
+        "weather_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "day_theme": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "exception_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        }
+      }
+    },
+    "interaction_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_target",
+        "chat_target",
+        "status_target",
+        "selfie_target",
+        "silent_target"
+      ],
+      "properties": {
+        "total_target": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "chat_target": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "status_target": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        },
+        "selfie_target": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "silent_target": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8
+        }
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/timeline_segment"
+      }
+    },
+    "events": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/planner_event"
+      }
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "mood": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valence",
+        "arousal",
+        "label"
+      ],
+      "properties": {
+        "valence": {
+          "type": "integer",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "arousal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        }
+      }
+    },
+    "timeline_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment_id",
+        "start_at",
+        "end_at",
+        "location_type",
+        "location_label",
+        "activity",
+        "reply_state",
+        "mood",
+        "attire",
+        "continuity_note"
+      ],
+      "properties": {
+        "segment_id": {
+          "type": "string",
+          "pattern": "^s[0-9]{2}$"
+        },
+        "start_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "end_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "location_type": {
+          "enum": [
+            "home",
+            "subway",
+            "office",
+            "outside",
+            "cinema",
+            "supermarket",
+            "restaurant",
+            "wuhan_home",
+            "other"
+          ]
+        },
+        "location_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "activity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reply_state": {
+          "enum": [
+            "available",
+            "available_short_reply",
+            "commuting_chatty",
+            "focused_no_reply",
+            "sleeping",
+            "washing_no_reply",
+            "resting_low_contact",
+            "overtime_low_contact"
+          ]
+        },
+        "mood": {
+          "$ref": "#/$defs/mood"
+        },
+        "attire": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "continuity_note": {
+          "type": "string",
+          "maxLength": 240
+        }
+      }
+    },
+    "time_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "earliest_at",
+        "preferred_at",
+        "latest_at"
+      ],
+      "properties": {
+        "earliest_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "preferred_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "latest_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      }
+    },
+    "message_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reply_pressure",
+        "must_reference_current_activity"
+      ],
+      "properties": {
+        "reply_pressure": {
+          "enum": [
+            "none",
+            "low",
+            "normal"
+          ]
+        },
+        "must_reference_current_activity": {
+          "type": "boolean"
+        }
+      }
+    },
+    "selfie_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "camera",
+        "framing",
+        "location",
+        "outfit",
+        "pose",
+        "expression",
+        "lighting",
+        "background",
+        "reference_images_required"
+      ],
+      "properties": {
+        "camera": {
+          "enum": [
+            "front_camera",
+            "mirror",
+            "other"
+          ]
+        },
+        "framing": {
+          "enum": [
+            "close_up",
+            "head_and_shoulders",
+            "half_body",
+            "full_body"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "outfit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "pose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "lighting": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "background": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reference_images_required": {
+          "const": true
+        },
+        "negative_constraints": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        }
+      }
+    },
+    "planner_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "origin",
+        "created_at",
+        "created_by",
+        "runtime_reason",
+        "supersedes_event_id",
+        "type",
+        "segment_id",
+        "time_window",
+        "priority",
+        "intent",
+        "topic_seed",
+        "message_constraints",
+        "context_requirements",
+        "cancel_conditions"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^[0-9]{8}-e[0-9]{2}$"
+        },
+        "origin": {
+          "const": "planner"
+        },
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "created_by": {
+          "const": "planner"
+        },
+        "runtime_reason": {
+          "type": "null"
+        },
+        "supersedes_event_id": {
+          "type": "null"
+        },
+        "type": {
+          "enum": [
+            "silent",
+            "chat",
+            "status",
+            "selfie"
+          ]
+        },
+        "segment_id": {
+          "type": "string",
+          "pattern": "^s[0-9]{2}$"
+        },
+        "time_window": {
+          "$ref": "#/$defs/time_window"
+        },
+        "priority": {
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ]
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "topic_seed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "message_constraints": {
+          "$ref": "#/$defs/message_constraints"
+        },
+        "context_requirements": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 10,
+          "items": {
+            "enum": [
+              "latest_chatlog",
+              "latest_daily_memory",
+              "current_reply_state",
+              "user_busy_state",
+              "unanswered_outbound_count",
+              "previous_event_result",
+              "weather"
+            ]
+          }
+        },
+        "cancel_conditions": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 12,
+          "items": {
+            "enum": [
+              "sleeping",
+              "focused",
+              "washing",
+              "user_dnd",
+              "user_busy_and_low_priority",
+              "three_unanswered",
+              "context_conflict",
+              "late_execution",
+              "selfie_generation_failed"
+            ]
+          }
+        },
+        "selfie_spec": {
+          "$ref": "#/$defs/selfie_spec"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "selfie"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "selfie_spec"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "selfie_spec"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

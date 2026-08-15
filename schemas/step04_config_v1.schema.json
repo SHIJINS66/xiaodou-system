@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workspace",
+    "session_key",
+    "openclaw_bin",
+    "openclaw_home",
+    "env_file",
+    "daily_json_root",
+    "journal_root",
+    "transaction_root",
+    "state_root",
+    "backup_root",
+    "daily_schema_path",
+    "config_schema_path",
+    "memory_schema_path",
+    "memory_prompt_path",
+    "deepseek_base_url",
+    "deepseek_model",
+    "request_timeout_seconds",
+    "openclaw_timeout_seconds",
+    "page_size",
+    "max_pages",
+    "max_messages",
+    "max_total_bytes",
+    "running_wait_seconds",
+    "model_repair_attempts",
+    "temperature",
+    "max_tokens",
+    "deepseek_thinking_type",
+    "deepseek_reasoning_effort"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "openclaw_bin": {
+      "type": "string",
+      "minLength": 1
+    },
+    "openclaw_home": {
+      "type": "string",
+      "minLength": 1
+    },
+    "env_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "daily_json_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "journal_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "transaction_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "backup_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "daily_schema_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "config_schema_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "memory_schema_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "memory_prompt_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deepseek_base_url": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deepseek_model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600
+    },
+    "openclaw_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300
+    },
+    "page_size": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500
+    },
+    "max_pages": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "max_messages": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "max_total_bytes": {
+      "type": "integer",
+      "minimum": 1024
+    },
+    "running_wait_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600
+    },
+    "model_repair_attempts": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "max_tokens": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 20000
+    },
+    "carryover_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rollover_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "openclaw_config_path": {
+      "type": "string"
+    },
+    "session_lifecycle_lock_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "_settings": {
+      "type": ["object", "null"]
+    },
+    "ws_url": {
+      "type": "string"
+    },
+    "auth_token_env": {
+      "type": "string"
+    },
+    "finalize_internal_lock_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rollover_lock_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rollover_hour": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23
+    },
+    "rollover_window_minutes": {
+      "type": "integer",
+      "minimum": 5,
+      "maximum": 120
+    },
+    "rollover_wait_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600
+    },
+    "rollover_poll_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60
+    },
+    "rollover_quiescence_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60
+    },
+    "deepseek_thinking_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deepseek_reasoning_effort": {
+      "type": "string",
+      "minLength": 1
+    },
+    "raw_backup_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "memory_generation_attempts": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "memory_normal_max_tokens": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 65536
+    },
+    "memory_repair_max_tokens": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 65536
+    },
+    "memory_conflict_max_tokens": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 65536
+    },
+    "memory_recovery_max_tokens": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 65536
+    }
+  }
+}

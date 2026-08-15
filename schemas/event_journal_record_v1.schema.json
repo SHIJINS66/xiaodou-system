@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xiaodou.local/schemas/event_journal_record_v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sequence",
+    "timestamp",
+    "event_id",
+    "execution_id",
+    "from_phase",
+    "to_phase",
+    "reason"
+  ],
+  "properties": {
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}-[er][0-9]{2}$"
+    },
+    "execution_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-zA-Z0-9_-]+-[a-f0-9]{32}$"
+    },
+    "from_phase": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "to_phase": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "provider": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "provider_message_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 200
+    },
+    "error_code": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "model": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "usage": {
+      "type": "object"
+    },
+    "request_fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

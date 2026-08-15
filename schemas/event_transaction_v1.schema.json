@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xiaodou.local/schemas/event_transaction_v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_id",
+    "date",
+    "event_id",
+    "phase",
+    "attempt_count",
+    "delay_count",
+    "created_at",
+    "updated_at",
+    "decision",
+    "decision_reason",
+    "prepared",
+    "telegram",
+    "injection",
+    "error",
+    "history"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "execution_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+-[a-f0-9]{32}$"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}-[er][0-9]{2}$"
+    },
+    "phase": {
+      "enum": [
+        "acquired",
+        "gated",
+        "decision_ready",
+        "prepared",
+        "telegram_sending",
+        "telegram_sent",
+        "injecting",
+        "injected",
+        "completed",
+        "delivery_unknown",
+        "injection_pending",
+        "injection_unknown",
+        "delayed",
+        "cancelled",
+        "skipped",
+        "failed"
+      ]
+    },
+    "attempt_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "delay_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "execute",
+        "adjust",
+        "delay",
+        "cancel",
+        "add_runtime_event"
+      ]
+    },
+    "decision_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1000
+    },
+    "prepared": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "text_sha256",
+        "image_path",
+        "image_sha256",
+        "transcript"
+      ],
+      "properties": {
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 65536
+        },
+        "text_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "image_path": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "image_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "transcript": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 70000
+        }
+      }
+    },
+    "telegram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sent",
+        "message_id",
+        "sent_at"
+      ],
+      "properties": {
+        "sent": {
+          "type": "boolean"
+        },
+        "message_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "sent_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "injection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "injected",
+        "message_id",
+        "injected_at",
+        "marker"
+      ],
+      "properties": {
+        "injected": {
+          "type": "boolean"
+        },
+        "message_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "injected_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "marker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        }
+      }
+    },
+    "error": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "at",
+          "from_phase",
+          "to_phase",
+          "reason"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "from_phase": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_phase": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "session_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 200
+    }
+  }
+}
