@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xiaodou.local/schemas/context_snapshot_v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "captured_at",
+    "date",
+    "event_id",
+    "current_segment_id",
+    "current_reply_state",
+    "declared_busy",
+    "do_not_disturb",
+    "unanswered_outbound_count",
+    "threshold_checkin_sent",
+    "last_user_message_at",
+    "last_outbound_at",
+    "superseded",
+    "context_conflict",
+    "recent_messages"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}-[er][0-9]{2}$"
+    },
+    "current_segment_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^s[0-9]{2}$"
+    },
+    "current_reply_state": {
+      "enum": [
+        "available",
+        "available_short_reply",
+        "commuting_chatty",
+        "focused_no_reply",
+        "sleeping",
+        "washing_no_reply",
+        "resting_low_contact",
+        "overtime_low_contact"
+      ]
+    },
+    "declared_busy": {
+      "type": "boolean"
+    },
+    "do_not_disturb": {
+      "type": "boolean"
+    },
+    "unanswered_outbound_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "threshold_checkin_sent": {
+      "type": "boolean"
+    },
+    "last_user_message_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "last_outbound_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "superseded": {
+      "type": "boolean"
+    },
+    "context_conflict": {
+      "type": "boolean"
+    },
+    "recent_messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "text",
+          "timestamp"
+        ],
+        "properties": {
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

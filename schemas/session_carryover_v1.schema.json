@@ -1,0 +1,35 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["schema_version","date","timezone","window_start","window_end","session_key_sha256","source_session_id_sha256","captured_at","messages","message_count","content_sha256","status"],
+  "properties":{
+    "schema_version":{"const":"1.0"},
+    "date":{"type":"string","format":"date"},
+    "timezone":{"const":"Asia/Shanghai"},
+    "window_start":{"type":"string","format":"date-time"},
+    "window_end":{"type":"string","format":"date-time"},
+    "session_key_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "source_session_id_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "captured_at":{"type":"string","format":"date-time"},
+    "messages":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/message"}},
+    "message_count":{"type":"integer","minimum":0,"maximum":100000},
+    "content_sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},
+    "status":{"const":"captured"}
+  },
+  "$defs":{
+    "message":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["id","timestamp","role","content","openclaw_seq","kind"],
+      "properties":{
+        "id":{"type":["string","null"]},
+        "timestamp":{"type":"string","format":"date-time"},
+        "role":{"enum":["user","assistant"]},
+        "content":{"type":"string"},
+        "openclaw_seq":{"type":["integer","null"]},
+        "kind":{"type":["string","null"]}
+      }
+    }
+  }
+}

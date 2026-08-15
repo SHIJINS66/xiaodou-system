@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "date",
+    "status",
+    "session_key_sha256",
+    "old_session_id_sha256",
+    "new_session_id_sha256",
+    "reset_requested_at",
+    "verified_at",
+    "carryover_path",
+    "carryover_sha256",
+    "carryover_message_count"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "const": "completed"
+    },
+    "session_key_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "old_session_id_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "new_session_id_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reset_requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "carryover_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "carryover_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "carryover_message_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100000
+    },
+    "previous_memory_status": {
+      "enum": [
+        "completed",
+        "pending",
+        "generated_unpublished",
+        "published",
+        "unknown"
+      ]
+    }
+  }
+}
