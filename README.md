@@ -9,237 +9,164 @@
 
 ## 摘要
 
-**xiaodou-system** 是一个构建在 [OpenClaw](https://docs.openclaw.ai) 之上的、面向长期陪伴场景的角色无关运行框架。系统以“自然日”为基本运行周期，将角色定义、每日生活规划、定时事件执行、主动消息发送、会话状态、日终记忆整理与跨日状态承接组织为一个闭环。其目标不是扩展语言模型的通用推理能力，而是为陪伴式智能体建立一套可审计、可恢复、可迁移的长期运行机制。
-
-与典型的响应式对话系统不同，xiaodou-system 不把用户当前消息视为唯一的行为起点。角色在每日开始时根据身份、生活规律、近期记忆、天气与前一日状态生成当天生活轨迹；随后由确定性调度系统在未来时间点执行相应事件，并在满足交互条件时主动触达用户；日终再将完整会话、计划、事件执行结果与主动消息记录统一整理为下一自然日可直接使用的跨日状态。由此形成：
+**xiaodou-system** 是一个构建在 [OpenClaw](https://docs.openclaw.ai) 之上的、面向长期陪伴场景的角色无关运行框架。系统以自然日为基本运行周期，将角色定义、每日规划、定时事件执行、主动消息、日终记忆与 Session 切换组织为一条完整流水线：
 
 ```text
-角色定义与历史状态
-        ↓
+角色与历史状态
+    ↓
 每日规划
-        ↓
+    ↓
 定时事件与主动交互
-        ↓
-完整当日会话与事件证据
-        ↓
-日终记忆编译
-        ↓
-受控 Session Rollover
-        ↓
+    ↓
+完整当日会话与事件记录
+    ↓
+日终记忆整理
+    ↓
+Session rollover
+    ↓
 下一自然日
 ```
 
-本项目采用“生成面与控制面分离”的设计。DeepSeek 与 Seedream 等生成模型负责计划、文本和图像内容；调度、Schema 校验、事件幂等、并发锁、事务状态、持久化与 Session 边界由 Python 脚本及 Linux 系统设施确定性控制。本文所称“确定性”仅指控制流程与状态迁移具有明确规则，并不意味着语言模型或图像模型的输出能够逐次复现。
+本项目不扩展语言模型本身的推理能力，而是处理长期陪伴智能体中的几个工程问题：角色如何在没有即时用户输入时继续拥有自己的日程与状态；前一日的重要经历如何自然影响下一日；主动消息如何与实际发送结果、会话历史和长期记忆保持一致；以及如何避免多个独立的摘要机制同时改写同一段历史。
 
-长期记忆方面，系统区分**持久化（Persistence）**、**检索（Retrieval）**与**连续性（Continuity）**。一条历史记录被写入磁盘，并不意味着它一定会在下一次自然交互中被模型使用；即使历史可通过搜索重新获取，也不等价于角色能够在无需用户提醒的情况下自然承接前一日状态。为此，xiaodou-system 将当前自然日的完整 Session 作为高保真工作记忆，并规定跨日语义只通过项目自身的日终记忆流水线生成，从而避免同一历史同时被多套独立摘要机制解释。
+系统采用生成逻辑与控制逻辑分离的设计。DeepSeek 与 Seedream 等模型负责生成计划、文本和图像；调度、JSON Schema 校验、幂等、文件锁、事务状态、持久化和 Session 切换由确定性脚本控制。本文所称“确定性”仅指控制流程与状态迁移具有明确规则，不表示模型输出可以逐次复现。
 
-现有研究已经分别验证了记忆、反思、规划与长期对话状态对持续型智能体的重要性 [1][2][3]。xiaodou-system 不提出新的模型算法，而是把这些要求落实为一个可部署的工程系统。当前实现以 **Linux + OpenClaw + Telegram** 为验证环境，默认使用 DeepSeek 作为文本模型、Seedream 作为图像生成服务。
-
-**关键词：** 长期陪伴智能体；主动交互；跨日记忆；Session 生命周期；事件状态机；OpenClaw；确定性编排
+当前实现以 **Linux + OpenClaw + Telegram** 为验证环境，默认使用 DeepSeek 作为文本模型、Seedream 作为图像生成服务。
 
 ---
 
-## 一、研究背景与问题定义
+## 一、背景与设计目标
 
-### 1.1 从响应式对话到持续运行
+### 1.1 长期陪伴式智能体的发展
 
-大型语言模型已经能够生成连贯的多轮对话，但“能够对话”与“能够长期作为一个角色持续存在”属于不同的问题层级。
+人与计算机建立持续社会互动的设想并不是大语言模型时代才出现的。早期聊天系统以 ELIZA 为代表，主要依靠规则匹配和文本变换维持局部对话；它并不具备今天意义上的长期记忆、人格状态或自主行为，但已经说明自然语言界面本身足以使用户产生明显的社会性解释。此后很长一段时间，对话系统的研究重点仍集中在“当前一句如何回复得更合理”，任务型系统关注任务完成，开放域聊天系统则关注流畅性与相关性。[1]
 
-典型对话系统可以抽象为：
+2010 年代中后期，研究开始更加明确地区分**任务型助手**与**社会型对话系统**。Microsoft XiaoIce 将长期 engagement、情绪理解和社会关系作为主要目标，而不仅是完成一次查询或任务；其系统设计已经把长期交互视为独立优化对象。[2] 与此同时，PERSONA-CHAT 等工作把显式 persona 引入开放域对话，使角色身份与表达一致性从隐式语言风格问题转变为可以单独建模的输入条件。[3] 这一阶段形成了陪伴式系统的两个基础要求：角色应当具有相对稳定的身份与表达方式，并且系统评价不能只看单轮回答质量。
+
+随着 Transformer 和大规模预训练语言模型的发展，开放域对话的生成能力明显提高，但上下文窗口仍然限制了长期交互。BlenderBot 3 已经把 long-term memory 与开放域对话、互联网访问结合在同一系统中，代表了一种典型思路：当前上下文之外维护额外存储，需要时再把历史信息取回。[4] 这使“长期记忆”逐渐从聊天记录保存问题转变为**存储、更新和检索策略**问题。
+
+2023 年以后，大语言模型推动这一方向进一步向长期 Agent 演化。MemoryBank 面向长期 AI companion 场景设计了可持续更新的外部记忆，使模型能够从过去对话中提取用户信息、强化重要内容并在后续交互中重新调用。[5] Generative Agents 则把观察、记忆、反思和规划组合起来，使 Agent 不仅能够回忆过去，还能够根据历史经验安排未来活动、形成日程并主动与其他角色发生交互。[6] 这一变化很重要：长期系统开始从“能够记住过去的聊天机器人”转向“具有持续内部状态并能据此行动的 Agent”。
+
+随后出现的问题不再只是“能否存下更多历史”，而是**历史能否在正确时间被正确使用**。LoCoMo 将长期对话评测扩展到最多 35 个 session，并把问题扩展到长期问答、事件总结和跨模态对话，结果表明即使模型拥有较长上下文或检索机制，跨 session 的时间、因果与事件关系仍然困难。[7] LD-Agent 因此进一步区分当前 session 与历史 session 的事件记忆，并动态维护用户与 Agent 的 persona，使长期对话不再只依赖单一的相似度检索。[8]
+
+到 2025—2026 年，长期记忆研究继续从“事实召回”向更复杂的状态使用问题推进。LoCoMo-Plus 特别构造了**当前触发语义与历史约束并不直接相似**的场景，用于测试模型能否应用隐含的长期约束，而不是只回答“过去发生过什么”。[9] 这与真实陪伴交互非常接近：用户经常不会明确要求系统回忆某件事，但此前发生的事件、承诺和关系状态仍然应当改变当前回应。
+
+因此，长期陪伴式智能体的发展可以概括为：
 
 ```text
-User Message
+单轮对话
     ↓
-Model
+开放域社会聊天
     ↓
-Response
+稳定 Persona
+    ↓
+跨 Session 长期记忆
+    ↓
+记忆驱动的规划与主动行为
+    ↓
+时间、事件与关系状态的持续承接
 ```
 
-这一结构默认每一轮行为都由用户消息触发，模型只需要解释当前上下文并产生回复。长期陪伴场景则额外要求系统处理时间、跨会话状态、主动行为、长期记忆以及角色自身的生活轨迹。用户没有发送消息时，角色仍然需要拥有当前时间、地点、活动和情绪等内部状态；用户第二天再次出现时，前一日的重要事件也应继续影响对话，而不是退化为只有在显式检索时才能恢复的历史档案。
+xiaodou-system 位于这一演化链的后半段。它并不提出新的通用记忆检索算法，而是关注一个更具体的工程问题：如何把角色每天的计划、实际发生的事件、主动消息、用户互动和长期记忆组织成连续的时间过程，使前一天的状态不只是“可以被搜索的历史”，而能稳定进入下一天的运行。
 
-Generative Agents 通过 memory、reflection 与 planning 组合展示了持续行为模拟的可行性 [1]；MemGPT 将长程交互中的 memory management 作为独立问题处理 [2]；LD-Agent 则进一步研究了长期对话中的 event memory 与动态 persona [3]。这些工作共同说明，长期智能体不能仅依赖当前对话窗口，而需要显式的时间与记忆结构。
+### 1.2 设计目标
 
-### 1.2 陪伴场景中的五个工程约束
+xiaodou-system 主要解决以下五个问题：
 
-xiaodou-system 将长期陪伴运行问题归纳为以下五个约束。
+1. **主动行为**：系统能够根据当天计划，在没有即时用户输入时产生未来事件，并在指定时间判断是否需要主动触达。主动行为应当来源于当天已经存在的角色状态，而不是每次定时器触发后临时让模型决定“现在做什么”。
 
-#### 时间主动性（Temporal Proactivity）
+2. **跨日连续性**：昨日的重要状态能够直接影响今日规划与对话，而不是只有在显式调用历史搜索后才重新出现。对于陪伴场景，“历史仍然保存”与“角色能够自然承接历史”是不同要求。
 
-系统必须能够在没有即时用户输入的情况下，根据当天计划产生未来事件，并在指定时间判断是否应主动触达。主动行为应来源于角色当天已经存在的生活状态，而不是每次到点后临时询问模型“现在要不要说点什么”。
+3. **可控执行**：事件是否执行、是否重复发送、消息是否已经写入 Session、失败后应该重试哪一步，必须由明确的程序状态决定。
 
-#### 跨日连续性（Cross-day Continuity）
+4. **记忆一致性**：当天完整会话、生活计划和实际事件由同一套日终流程整理为跨日记忆，避免不同摘要机制分别解释同一段历史并在后续运行中产生冲突。
 
-昨日的重要经历必须能够直接影响下一自然日的规划与交互。对于“我到了”“出来了”“结束了”一类语义极短、但高度依赖前序事件的消息，系统不能要求用户显式提出“去翻一下昨天发生了什么”以后才恢复正确上下文。
+5. **角色与系统分离**：身份、性格、生活规律和用户关系由 Markdown 文件描述，执行逻辑不绑定具体角色。角色变化不应要求重写调度、事件执行和记忆流水线。
 
-#### 单一记忆权威（Single Memory Authority）
+## 二、系统设计
 
-同一段历史不应同时由多个相互独立的摘要系统长期解释。若 Session compaction、memory flush、日终记忆模型分别对同一段对话形成不同摘要，就可能在时间、因果、未完成事项、关系状态或信息优先级上产生差异。xiaodou-system 因此要求跨日语义只有一条正式转换路径。
+### 2.1 角色文件
 
-#### 运行可控性（Operational Determinism）
-
-事件是否重复执行、消息是否已经发送、Session 是否可以 rollover、记忆文件是否写入成功等问题必须由程序状态决定，而不能交由模型临场判断。
-
-#### 角色可移植性（Role Portability）
-
-人格、身份、生活规律和用户关系应以可读、可编辑的角色文件表达，而不是写死在执行脚本中。框架应在更换角色时保持核心运行协议不变。
-
----
-
-## 二、系统模型与设计原则
-
-### 2.1 角色模型
-
-xiaodou-system 使用 workspace 中的 7 个核心 Markdown 文件定义角色：
+角色由 workspace 中的 7 个核心 Markdown 文件定义：
 
 | 文件 | 职责 |
 |---|---|
-| `AGENTS.md` | 运行规则与角色侧行为约束 |
-| `IDENTITY.md` | 身份与稳定背景信息 |
-| `SOUL.md` | 性格、表达方式、情绪与互动边界 |
-| `LIFE.md` | 生活规律与 Planner 的日程生成依据 |
-| `USER.md` | 陪伴对象及相关长期信息 |
+| `AGENTS.md` | 运行规则与行为约束 |
+| `IDENTITY.md` | 身份与稳定背景 |
+| `SOUL.md` | 性格、表达方式与互动边界 |
+| `LIFE.md` | 生活规律与 Planner 的主要依据 |
+| `USER.md` | 陪伴对象及长期信息 |
 | `TOOLS.md` | 工具与运行环境说明 |
 | `MEMORY.md` | 经整理后的长期记忆 |
 
-代码不根据角色姓名、经历或表达风格建立业务分支。角色差异进入生成阶段，调度、状态迁移和持久化逻辑保持一致。
+角色内容不写死在业务脚本中。更换角色时，原则上只需要替换角色文件和相关资源配置。
 
-其中，`LIFE.md` 描述稳定生活规律，`MEMORY.md` 描述跨日长期状态；二者共同参与新的 DailyPlan 构造。换一组角色文件即可得到不同角色，而无需修改主要流水线。
+### 2.2 自然日状态
 
-### 2.2 时间模型
-
-系统把一个自然日视为一个明确的运行单元：
+系统将一个自然日作为主要运行单元：
 
 ```text
 Day N
 ├── DailyPlan
 ├── Scheduled Events
 ├── Executed Events
-├── User Interactions
-├── Working Session
+├── Conversation
+├── Event Journal
 └── Daily Memory
 ```
 
-这意味着“时间”不是单纯的 cron 时间戳，而是角色状态的一部分。某个 17:45 事件并不只是“17:45 执行一个任务”，而是：
+`DailyPlan` 不是单纯的定时任务列表。它描述角色在这一天中预计处于什么活动、地点和情绪状态，以及哪些时间窗口允许主动交互。调度器只负责在指定时间启动事件，真正决定事件语义的是 DailyPlan。
+
+这一设计使角色的主动行为具有前后关系。例如某个傍晚事件并不是一个孤立的“发送消息”任务，而是当天生活轨迹中的一个节点；事件执行时可以读取此前已经发生的活动、当前状态以及用户最近的交互，再决定是否发送、发送什么，以及是否需要图片。
+
+DailyPlan 同时也是 step03 与 step04 之间的重要连接。step03 根据它执行事件；step04 则把“原计划”与“实际执行结果”同时纳入日终整理，从而区分计划、真实发生的事件以及被取消或抑制的事件。
+
+### 2.3 当日会话与跨日记忆
+
+当前 Session 主要保存当天完整交互；`Daily Memory` 与 `MEMORY.md` 保存已经过日终整理的跨日信息。
+
+二者之间的转换路径固定为：
 
 ```text
-今天的角色
-    ↓
-已经经历当天前序活动
-    ↓
-到达 17:45 对应生活事件
-    ↓
-根据当前状态决定是否与用户交互
-```
-
-DailyPlan 因此承担“当天世界状态”的角色，而不是单纯的任务清单。
-
-### 2.3 记忆模型
-
-系统区分两类记忆。
-
-#### 工作记忆（Working Memory）
-
-```text
-当前自然日的完整 OpenClaw Session
-```
-
-其特点是：
-
-- 保留当天原始交互；
-- 保留主动触达及用户后续回应；
-- 在日终前尽量不进行跨日语义压缩；
-- 作为当天事实的高保真证据来源。
-
-#### 跨日记忆（Consolidated Memory）
-
-```text
-Daily Memory + MEMORY.md
-```
-
-其特点是：
-
-- 由 step04 统一生成；
-- 表示已完成日终整理的历史状态；
-- 直接参与下一自然日 Planner 与交互上下文；
-- 周期性去重、合并与压缩。
-
-两者之间只有一条正式转换路径：
-
-```text
-完整 Working Session
+完整当日 Session
 + DailyPlan
 + Event Journal
-+ 主动消息与用户互动
++ 主动消息与用户回应
         ↓
 step04
         ↓
 Daily Memory / MEMORY.md
 ```
 
-### 2.4 Persistence、Retrieval 与 Continuity
+这种划分首先解决信息来源问题。当天对话仍然保留原始上下文，主动事件也通过 Event Journal 和 Session 注入留下证据；到了日终，系统再从这些完整材料中生成跨日记忆，而不是在一天中反复把不同局部摘要写回同一个长期文件。
 
-长期陪伴系统不能把“数据还在”直接等价为“角色还记得”。
+其次，它使“近期连续性”和“远期检索”可以分开处理。前一天仍会影响今天的状态，因此需要直接进入新一天的规划与上下文；更久以前、当前并不一定相关的信息，则可以继续通过长期记忆或搜索机制按需获取。
 
-```text
-Persistence
-= 信息是否仍被物理保存
+旧 transcript、日志和备份仍然保留，但主要用于审计、故障定位和恢复，不作为正常对话中的主要记忆入口。
 
-Retrieval
-= 当前运行是否能够重新找到该信息
+### 2.4 生成与控制分离
 
-Continuity
-= 角色是否无需用户提醒即可自然使用该信息
-```
+模型负责：
 
-这三个层级必须分别处理。
+- 生成 DailyPlan；
+- 生成主动消息；
+- 生成日终记忆文本；
+- 可选生成图像。
 
-例如：
-
-```text
-昨日：
-“我明天下午去考试。”
-
-今日：
-“我出门了。”
-```
-
-第二句话几乎不包含足够强的语义检索线索，但其合理解释依赖昨天的考试安排。若系统只有在用户追加“你去翻一下昨天我们说了什么”以后才恢复历史，那么 Persistence 与 Retrieval 可能都没有失败，但 Continuity 已经失败。
-
-因此，xiaodou-system 把“昨日重要状态”作为下一自然日直接输入，而不是仅作为可搜索档案。
-
-### 2.5 生成面与控制面
-
-系统将生成能力与运行控制明确分开。
-
-**生成面：**
-
-- DailyPlan 内容生成；
-- 消息文案生成；
-- Daily Memory 内容生成；
-- Seedream 图像生成。
-
-**控制面：**
+确定性脚本负责：
 
 - 定时触发；
 - Schema 校验；
 - 幂等判断；
-- `flock` 并发锁；
-- 事务状态；
+- `flock` 并发控制；
+- 发送与注入状态记录；
 - 文件持久化；
-- Session Rollover；
-- 失败恢复。
-
-其设计原则可概括为：
-
-> **Generative intelligence inside deterministic boundaries.**
-
-模型负责“生成什么”，程序负责“什么时候生成、是否允许执行、是否已经执行、结果写到哪里、失败后如何恢复”。
+- Session rollover；
+- 异常恢复。
 
 ---
 
 ## 三、总体架构
-
-### 3.1 架构组成
 
 <p align="center">
   <img src="docs/architecture.svg" alt="xiaodou-system 架构图" width="880"/>
@@ -247,16 +174,16 @@ Continuity
   <em>图 1：系统总体架构 —— 三层业务流水线与贯穿始终的持久层</em>
 </p>
 
-系统由四个层面构成：
+系统主要由四部分组成：
 
-- **角色契约层**：7 个 Markdown 文件；
-- **业务流水线层**：step02、step03、step04；
-- **外部依赖层**：LLM、图像服务、OpenClaw Gateway、消息通道；
-- **基础设施与持久层**：Linux、`cron`、`at`、`flock`、daily、chatlog、MEMORY、日志和备份。
+- 角色文件；
+- step02 / step03 / step04 三条流水线；
+- `providers/` 外部依赖层；
+- Linux 调度、文件持久化、日志和备份。
 
-### 3.2 外部依赖抽象
+### 3.1 providers
 
-第三方服务统一封装于 `providers/`：
+外部服务统一封装于 `providers/`：
 
 ```text
 providers/
@@ -272,11 +199,11 @@ providers/
 └── base.py
 ```
 
-业务逻辑依赖 provider 接口，而不直接依赖某个模型供应商或消息服务的具体 SDK。这样可以在保持 DailyPlan、Event Model 和 Memory Pipeline 不变的情况下替换外部实现。
+业务脚本依赖 provider 接口，而不是直接依赖某个供应商的具体 SDK。这样可以在不修改 DailyPlan、事件执行和记忆流程的前提下替换模型或消息通道。
 
-### 3.3 持久化状态
+### 3.2 持久化对象
 
-主要持久化对象包括：
+主要运行数据包括：
 
 ```text
 workspace/
@@ -291,11 +218,11 @@ settings.yaml
 backups/
 ```
 
-系统优先将关键状态写入结构化文件或日志，而不是只保存在当前模型上下文中。
+关键状态优先落盘，而不是只存在于当前模型上下文中。
 
 ---
 
-## 四、自然日运行机制
+## 四、自然日运行流程
 
 ### 4.1 step02：每日规划
 
@@ -310,7 +237,7 @@ backups/
 - `schema_validator.py`
 - `weather_provider.py`
 
-输入：
+输入包括：
 
 ```text
 角色核心文件
@@ -319,22 +246,13 @@ backups/
 + 昨日执行结果
 ```
 
-输出：
+输出为：
 
 ```text
 daily/YYYY-MM-DD.json
 ```
 
-DailyPlan 描述：
-
-- 当天活动；
-- 地点；
-- 情绪状态；
-- 可触达窗口；
-- silent / non-silent 事件；
-- 可能需要的自拍等媒体行为。
-
-模型生成结果必须通过 JSON Schema 校验后才能进入后续阶段。Schema 保证的是结构契约有效，不保证文本语义完全正确，也不保证相同输入必然生成相同计划。
+DailyPlan 描述当天活动、地点、情绪、可触达窗口和相关事件。生成结果必须通过 JSON Schema 校验后才能进入后续阶段。Schema 只验证结构契约，不保证模型内容本身完全正确。
 
 ### 4.2 step03：调度与事件执行
 
@@ -355,43 +273,29 @@ DailyPlan 描述：
 
 晨间阶段读取 DailyPlan，将需要执行的 non-silent 事件提交给系统 `at`。
 
-单个事件到达触发时间后按以下路径运行：
+单个事件执行流程：
 
 ```text
 读取 DailyPlan 与上下文
-        ↓
-幂等检查
-        ↓
-获取 flock
-        ↓
-构造 Context Snapshot
-        ↓
-判断当前事件是否仍应执行
-        ↓
+    ↓
+幂等检查 / flock
+    ↓
+判断事件当前是否仍应执行
+    ↓
 生成消息
-        ↓
-可选：Seedream 生成图像
-        ↓
-发送 Telegram
-        ↓
+    ↓
+可选生成图像
+    ↓
+Telegram 发送
+    ↓
 写入 OpenClaw Session
-        ↓
-Event Journal / Transaction 回写
+    ↓
+状态与 Event Journal 回写
 ```
 
-事件不是一个单一的“成功 / 失败”布尔值。生成、发送、注入和最终提交分别记录状态，以支持部分失败恢复。
+发送消息和写入 Session 是两个独立副作用，因此系统分别记录生成、发送、注入和最终提交状态。若消息已经成功发送但 Session 注入失败，恢复时只补做注入，避免重复发送。
 
-例如：
-
-```text
-delivery = succeeded
-injection = failed
-transaction = partial
-```
-
-此时恢复逻辑只能补做 Session 注入，而不能重新发送 Telegram 消息，否则可能产生重复触达。
-
-### 4.3 step04：日终记忆编译
+### 4.3 step04：日终记忆
 
 默认时序：
 
@@ -414,33 +318,24 @@ transaction = partial
 - `memory_quality.py`
 - `rollover_artifacts.py`
 
-日终输入包括：
+step04 综合以下数据：
 
 ```text
 完整当日 Session
 + DailyPlan
-+ 实际事件执行状态
++ 实际事件状态
 + Event Journal
 + 主动消息
 + 用户回应
-+ 当日产物
 ```
 
-其输出并不是简单聊天摘要，而是一个 episode-level 的跨日状态表示。系统需要回答：
+它首先重建当天实际发生的过程：哪些计划按时执行，哪些事件被取消或 suppress，角色主动发送过什么，用户对此如何回应，以及哪些事项仍然处于未完成状态。在此基础上生成 Daily Memory，并把需要长期保留的信息更新到 `MEMORY.md`。
 
-- 今天计划了什么；
-- 哪些事件实际发生；
-- 哪些事件被 suppress；
-- 角色主动说了什么；
-- 用户如何回应；
-- 哪些状态仍然影响下一天；
-- 哪些信息应该进入长期 MEMORY。
+因此 Daily Memory 不是简单的“聊天摘要”。它承担两个职责：一是保存当天 episode 的主要事实与关系变化，二是给下一自然日提供足够的近期状态。周度压缩再负责对长期 `MEMORY.md` 做去重和收敛，而不是在每个对话轮次持续改写长期记忆。
 
-### 4.4 Session Rollover
+### 4.4 Session rollover
 
-xiaodou-system 将每日 Session 视为当天高保真工作记忆。
-
-Rollover 必须位于主要记忆处理之后：
+每日 rollover 在主要记忆处理完成之后执行：
 
 ```text
 Day N 完整 Session
@@ -449,367 +344,96 @@ Daily Memory
         ↓
 MEMORY 更新
         ↓
-主要持久化完成
-        ↓
-Session Rollover
+session_rollover
         ↓
 Day N+1
 ```
 
-其关键约束是：
-
-> **Memory processing precedes rollover.**
-
-Rollover 的目的不是遗忘，也不是因为 Session “过期”，而是建立明确的自然日边界，并在长 Session 进入不可控的历史摘要之前，把当天完整证据交给唯一的跨日 Memory Pipeline。
-
-### 4.5 跨日闭环
-
-```text
-昨日 Consolidated Memory
-        ↓
-今日 Planner
-        ↓
-DailyPlan
-        ↓
-Scheduled Events
-        ↓
-Actual Events + Conversation
-        ↓
-Working Session
-        ↓
-Daily Memory Compiler
-        ↓
-新的 Consolidated Memory
-        ↓
-Rollover
-        ↓
-下一自然日
-```
-
-Daily Memory 因此不仅用于保存过去，更用于构造未来状态。
+这样做既能尽量保留当天完整会话，也能保证进入下一天前，前一日信息已经进入项目自己的跨日记忆。
 
 ---
 
-## 五、OpenClaw 能力边界与适配性分析
+## 五、OpenClaw 的能力边界与适配问题
 
-### 5.1 OpenClaw 的基础能力
+OpenClaw 已经提供 Agent workspace、Session、Memory、Memory Search、Active Memory、Compaction、Dreaming、Telegram 和 Automations 等通用能力 [10–18]。xiaodou-system 并不重新实现这些基础设施，而是对其中几项机制增加适合陪伴场景的约束。
 
-截至 2026-08-16，OpenClaw 已经具备与本项目高度相关的通用基础设施，包括：
+### 5.1 记忆检索不等于跨日连续性
 
-- Agent workspace 与上下文文件 [4]；
-- Gateway-owned Session 与 transcript [5][6]；
-- Markdown memory、memory search 与 memory-core [7]；
-- Dreaming 与 consolidation [8]；
-- Active Memory [9]；
-- Compaction 与 automatic memory flush [7][10]；
-- Telegram 等消息通道 [11]；
-- Automations 调度器 [12]。
+OpenClaw 可以持久化 daily memory，并通过 `memory_search` / `memory_get` 检索；Active Memory 也可以在交互过程中召回历史 [13][15]。
 
-因此，xiaodou-system 不重新实现通用 Agent Runtime。其新增部分位于更高的应用语义层：
+对通用 Agent 而言，按需检索可以控制上下文长度并减少无关信息。但陪伴式交互中，很多短句的正确理解依赖前一日状态，而当前消息本身未必包含足够明确的检索线索。
+
+因此，仅保证历史“可搜索”并不足够。xiaodou-system 将昨日的重要状态直接作为下一日 Planner 与交互上下文的一部分；更远期的信息再交给 memory search 补充。
+
+这里需要区分三件事：
+
+- 数据仍然存在；
+- 系统能够搜索到它；
+- 角色会在当前对话中自然使用它。
+
+本项目关注的是第三项。
+
+### 5.2 Session 切换不能早于记忆整理
+
+旧 Session 即使仍保留在 transcript、SQLite 或归档中，如果其中的重要信息尚未进入跨日记忆，新 Session 仍可能表现为“忘记了昨天”。
+
+因此，xiaodou-system 把 transcript 视为审计和恢复数据，而不是正常跨日记忆的替代品。正常情况下，Session rollover 必须位于日终记忆处理之后。
+
+### 5.3 为什么避免依赖长期 Session compaction
+
+OpenClaw 的 Compaction 会把较早对话总结为摘要，并以“摘要 + 近期消息”的形式继续当前 Session [18][16]。这对于通用 Agent 是合理的上下文管理方式。
+
+xiaodou-system 本身已经会在日终根据完整 Session、DailyPlan、Event Journal 和主动消息生成 Daily Memory。如果同一段历史先经过 OpenClaw Compaction，再经过项目自己的记忆整理，就可能同时存在两份来源不同的摘要。
+
+两份摘要即使都没有明显错误，也可能在细节、时间顺序、未完成事项或重要性判断上不同。对于需要长期保持关系状态的陪伴角色，没有必要引入这种额外的不一致来源。
+
+因此，当前设计更倾向于：
 
 ```text
-OpenClaw
-提供 Agent Runtime 原语
-
+单日尽量保留完整 Session
         ↓
-
-xiaodou-system
-定义陪伴角色的自然日生命周期
-```
-
-两者的关系不是“OpenClaw 缺少功能，因此重新造一套功能”，而是“OpenClaw 的通用机制无法自动推导出陪伴角色所需的时间、事件与跨日状态约束”。
-
-### 5.2 原生 Memory 与跨日连续性
-
-OpenClaw 的 memory files 可以持久化并被 `memory_search` / `memory_get` 检索；Active Memory 也能在符合条件的交互中主动召回历史 [7][9]。
-
-这一模型对于通用 Agent 是合理的：只有当前任务与历史相关时才检索，可以减少上下文占用与无关信息干扰。
-
-陪伴场景的约束不同。
-
-大量自然语言承接并不包含明确的 recall intent。例如：
-
-```text
-昨日：
-“我明天下午要去考试。”
-
-今日：
-“我出门了。”
-```
-
-当前消息并没有显式要求系统回忆昨天，也不一定形成高质量 semantic query；但对陪伴角色而言，昨天的考试安排已经属于当前关系状态的一部分。
-
-因此，xiaodou-system 不把“memory search 最终可以找到昨天”视为跨日连续性的充分条件。近期关键状态必须在用户当前消息到来之前已经进入当日工作状态。
-
-形式上：
-
-```text
-OpenClaw 通用检索路径：
-
-Current Query
-    ↓
-判断是否需要历史
-    ↓
-Search
-    ↓
-Past Memory
-
-
-xiaodou-system 近期连续性路径：
-
-Past Episode
-    ↓
-Current State
-    ↓
-Interpret Current Query
-```
-
-二者并不冲突。远期历史仍可使用 OpenClaw memory search；但昨日的重要事件不依赖临时检索才能成立。
-
-### 5.3 Session Reset 与尚未完成的记忆提交
-
-Session transcript 的物理存在不等价于角色当前能够使用这些内容。
-
-即使旧历史仍保存在 transcript、SQLite 或其他归档中，如果新 Session 中没有相应状态，用户仍可能看到：
-
-```text
-昨天：
-用户已经说明今天要去医院。
-
-今天：
-用户：“我到了。”
-
-角色：
-“到了哪里？”
-```
-
-从底层存储角度，历史可能没有丢失；从陪伴交互角度，连续性已经中断。
-
-因此，xiaodou-system 不把“旧 transcript 可恢复”作为正常记忆机制，而只把它视为审计与灾难恢复能力。正常跨日状态必须在 Session 边界之前完成显式提交。
-
-### 5.4 Compaction 与双重摘要权威
-
-OpenClaw 的 compaction 用于控制长 Session 的上下文规模。较早的对话会被总结为持久化 compaction entry，随后以：
-
-```text
-Compaction Summary
-+
-近期未压缩消息
-```
-
-继续当前 Session [6][10]。
-
-在通用 Agent 中，这是一种必要的上下文管理机制。
-
-xiaodou-system 已经存在另一条跨日摘要链：
-
-```text
-完整 Session
-+ DailyPlan
-+ Event Journal
-+ 主动消息
-+ 用户回应
+step04 统一整理
         ↓
-step04
-        ↓
-Daily Memory / MEMORY.md
+rollover
 ```
 
-如果允许同一段历史先经过 OpenClaw compaction，再经过 xiaodou-system Memory Compiler，则后续模型可能同时读取：
+而不是让一个 Session 长期增长并反复依赖 Compaction。
 
-```text
-OpenClaw Compaction Summary
-            +
-xiaodou Daily Memory
-```
+### 5.4 为什么仍保留独立 step04
 
-二者即使都没有明显事实错误，也可能在细节保留、时间顺序、事件因果、未完成事项、关系状态和重要性判断上产生不同取舍。
+OpenClaw 已经具备 Memory、Active Memory、Dreaming 与 consolidation [13–15]。step04 仍然保留，是因为它处理的不只是“哪些聊天内容值得长期记住”，还需要同时对齐当天计划、实际事件、主动消息、用户回应和下一日仍需保留的状态。
 
-这种问题不是传统意义上的“数据丢失”，而是**语义权威分裂**：
+因此它承担的是自然日状态整理，而不是另一个 Memory Search 实现。
 
-```text
-同一历史
-    ├── Summary A
-    └── Summary B
+### 5.5 为什么当前仍使用 `cron + at`
 
-两份摘要同时成为未来推理依据
-```
+OpenClaw Automations 已经可以执行一次性和周期性任务 [18]。
 
-陪伴系统需要稳定的人际关系状态，因此这种不确定性不可接受。
+当前版本仍使用 Linux `cron + at`，主要因为现有运行链已经围绕独立 Python 进程、文件状态、`flock`、Event Journal 和 Transaction State 完成验证，并且即使 Gateway 暂时不可用，也能记录事件本应执行以及失败原因。
 
-xiaodou-system 采用 **Single Memory Authority** 原则：
-
-> 当天完整 Session 作为原始工作证据；跨日 consolidated memory 只由 step04 正式生成。
-
-这并不意味着 OpenClaw compaction 本身错误，而是其职责与本项目的跨日 Memory Compiler 重叠。如果两者同时承担 canonical history，就会形成不必要的语义冲突。
-
-### 5.5 Daily Rollover 的必要性
-
-当前 OpenClaw 可以维持持续 Session，也支持可配置的 daily / idle reset [5][6]。
-
-xiaodou-system 仍主动执行 daily rollover，是为了在以下两个目标之间建立确定边界：
-
-1. **当天尽量保留完整原始 Session；**
-2. **跨日后只使用已经经过项目自身 Memory Pipeline 的状态。**
-
-如果 Session 无限持续：
-
-```text
-Day 1
-+ Day 2
-+ Day 3
-+ Day 4
-...
-```
-
-最终必然受到 context window 约束，并进入 compaction。
-
-如果每天在记忆完成前直接 reset，则又可能导致当天尚未进入 consolidated memory 的信息退出当前工作上下文。
-
-因此采用：
-
-```text
-完整单日 Session
-        ↓
-Memory Commit
-        ↓
-Rollover
-```
-
-Rollover 实际上构成一个 **Memory Commit Boundary**。
-
-### 5.6 Automations 与 Daily Event Model
-
-OpenClaw Automations 已经能够执行一次性和周期性任务 [12]。
-
-但调度器解决的是：
-
-```text
-何时运行某个任务
-```
-
-而 xiaodou-system 需要定义的是：
-
-```text
-这个事件在角色今天的生活里意味着什么
-```
-
-例如同样是 17:45：
-
-```text
-Scheduler:
-17:45 execute job A
-```
-
-而 Daily Event Model 还包含：
-
-```text
-activity
-location
-mood
-interaction_window
-silent
-selfie
-previous_state
-next_state
-relationship_context
-```
-
-因此 Automations 可以替换当前部分 `cron + at` 后端，但无法替代 DailyPlan 与 Event Model。
-
-当前版本使用 `cron + at`，是因为其运行链已经围绕：
-
-```text
-Linux process
-+ file state
-+ flock
-+ event journal
-+ transaction
-```
-
-完成验证，并且调度状态可以在 Gateway 之外独立检查。
-
-未来可以增加 OpenClaw Automations adapter，只要 DailyPlan、Event Model 和 Memory Pipeline 的语义保持不变。
-
-### 5.7 Active Memory 与近期工作状态
-
-Active Memory 改善了传统纯按需检索的问题，但它仍属于“当前交互发生以后，根据当前输入决定召回什么”的机制 [9]。
-
-xiaodou-system 的近期记忆目标更严格：
-
-> 用户消息到来以前，昨日关键状态已经成为今天的运行状态。
-
-因此两者适用于不同层级：
-
-```text
-xiaodou recent-state continuity
-负责：昨日 / 今日关键状态
-
-OpenClaw Active Memory / memory search
-负责：更远期、按主题、按语义补充召回
-```
-
-这是一种互补关系，而不是替代关系。
-
-### 5.8 适配结论
-
-OpenClaw 已经解决了 Session、Memory、Search、Compaction、Channel、Automation 等通用 Agent Runtime 问题，但这些能力默认并不包含以下应用层约束：
-
-```text
-自然日作为状态边界
-DailyPlan 作为当天世界状态
-事件属于角色生活而非单纯后台任务
-昨日关键状态必须直接参与今日
-单日 Session 尽量保留高保真原文
-跨日历史只允许一个 canonical compiler
-Memory Commit 必须先于 Rollover
-```
-
-xiaodou-system 的必要性由这些约束共同构成，而不是由 OpenClaw 某一个具体功能缺失决定。
+`cron + at` 只是当前调度后端。未来可以替换为 OpenClaw Automations，只要 DailyPlan、事件状态和 step04 的数据契约保持不变。
 
 ---
 
-## 六、可靠性与状态一致性
+## 六、可靠性设计
 
-### 6.1 数据契约
+陪伴系统会长期无人值守运行，且主动消息属于对用户可见的外部副作用，因此不能只依赖“脚本运行成功”判断系统状态。xiaodou-system 把生成、调度、发送、Session 注入和持久化拆成可以分别确认的步骤。
 
-项目使用 JSON Schema 对跨阶段数据进行结构约束，目前包含 19 个 Schema。
+### 6.1 JSON Schema
 
-Schema 用于检测：
+项目使用 19 个 JSON Schema 对跨阶段数据进行结构校验，用于检测必需字段缺失、类型错误、枚举值非法和不符合协议的模型输出。
 
-- 必需字段缺失；
-- 类型错误；
-- 枚举值越界；
-- 不符合协议的模型输出。
+Schema 的作用是保证 step02 / step03 / step04 之间交换的数据满足协议。它不负责判断生成文本的事实正确性，也不保证相同输入得到完全相同的输出。
 
-Schema 不能保证自然语言事实正确，也不能保证不同模型调用生成相同内容。
+### 6.2 幂等与并发
 
-### 6.2 幂等与并发控制
+step03 使用稳定事件标识、状态检查和 `flock`，避免 cron 重入、`at` 重复触发或人工补跑导致同一事件重复发送。
 
-step03 通过：
+只有“当前事件尚未完成且当前进程获得执行权”时，执行链才会继续。这样可以把操作系统级调度的重复触发与用户实际收到的消息次数分离。
 
-- 稳定事件标识；
-- 幂等状态检查；
-- `flock`；
-- Event Journal；
-- Transaction State；
+### 6.3 部分失败与状态回写
 
-避免 cron 重入、`at` 重复触发或人工补跑导致重复发送。
-
-### 6.3 外部副作用事务
-
-消息发送与 Session 注入属于两个独立副作用。
-
-若：
-
-```text
-Telegram send = succeeded
-chat.inject = failed
-```
-
-事件不能整体重试，否则可能重复发送。
-
-系统因此分别记录：
+事件执行分别记录：
 
 ```text
 generated
@@ -818,9 +442,11 @@ injected
 committed
 ```
 
-恢复逻辑根据已完成阶段决定补偿操作。
+这一区分对主动消息尤其重要。例如 Telegram 已发送成功而 Session 注入失败时，整个事件不能从头重试，否则用户可能收到第二条相同消息。系统应保留已经完成的外部副作用，只补做缺失步骤。
 
-### 6.4 备份与审计
+Event Journal 与 transaction state 因此既用于审计，也用于恢复时确定正确的重试边界。
+
+### 6.4 备份
 
 项目提供：
 
@@ -828,17 +454,13 @@ committed
 - `raw_backup.py`
 - `rollover_artifacts.py`
 
-备份覆盖运行配置、长期记忆、聊天记录和相关事件产物。
-
-备份的作用是保留证据与灾难恢复材料，而不是替代正常的记忆连续性机制。
-
----
+备份覆盖运行配置、长期记忆、聊天记录和事件产物，用于审计与异常恢复。备份可以帮助找回底层数据，但不能替代正常的跨日记忆流程；正常运行仍要求前一日的重要状态在 rollover 前完成整理。
 
 ## 七、运行验证
 
-当前验证结论仅表示 Linux 环境中的主要运行链路已经贯通，不构成聊天质量、长期 SLA 或跨平台性能证明。
+当前结果仅说明 Linux 环境中的主要运行链路已经贯通，不构成长期 SLA、聊天质量或跨平台性能证明。
 
-### 7.1 Telegram 交互
+### 7.1 Telegram
 
 <p align="center">
   <img src="docs/screenshot-telegram.jpg" alt="正常运行状态下的 Telegram 对话效果" width="800"/>
@@ -846,7 +468,7 @@ committed
   <em>图 2-a：角色在 Telegram 上的日常对话与自拍</em>
 </p>
 
-当前实现能够根据 DailyPlan 触发主动事件，在策略允许时生成文本及可选图像，并通过 Telegram 发送。
+当前实现能够根据 DailyPlan 触发主动事件，在策略允许时生成文本和可选图像并通过 Telegram 发送。
 
 ### 7.2 文件持久化
 
@@ -858,31 +480,10 @@ committed
 
 运行过程中：
 
-```text
-daily/
-```
-
-保存计划与事件状态；
-
-```text
-chatlog/
-```
-
-保存聊天记录；
-
-```text
-daily_selfies/
-```
-
-保存图像产物；
-
-```text
-MEMORY.md
-```
-
-保存经过整理的长期状态。
-
-这些文件同时构成日终记忆与故障排查的主要输入。
+- `daily/` 保存计划与执行状态；
+- `chatlog/` 保存聊天记录；
+- `daily_selfies/` 保存图像产物；
+- `MEMORY.md` 保存整理后的长期状态。
 
 ---
 
@@ -897,7 +498,7 @@ MEMORY.md
 - `cron`
 - `flock`
 - 默认时区：`Asia/Shanghai`
-- 已安装并完成初始化的 [OpenClaw](https://docs.openclaw.ai)
+- 已安装并初始化 OpenClaw
 - Python 依赖：
 
 ```bash
@@ -911,14 +512,9 @@ openclaw configure
 openclaw health
 ```
 
-至少需要完成：
+需要完成模型/provider、Gateway、Telegram channel 和 workspace / session 对应关系配置。
 
-- 可用模型/provider 配置；
-- Gateway 启动与健康检查；
-- Telegram channel；
-- workspace / session 对应关系。
-
-如果默认端口被占用，可配置其他 Gateway 端口，例如：
+如果默认端口被占用，可修改 Gateway 端口，例如：
 
 ```bash
 openclaw config set gateway.port 19203
@@ -932,14 +528,7 @@ cd xiaodou-system
 bash init.sh
 ```
 
-`init.sh` 执行：
-
-1. 环境检查；
-2. 核心角色文件准备；
-3. `settings.yaml` 生成；
-4. 运行目录创建；
-5. 脚本与配置校验；
-6. 可选 cron 安装。
+`init.sh` 负责环境检查、角色文件准备、`settings.yaml` 生成、目录创建、脚本校验和可选 cron 安装。
 
 默认实例目录：
 
@@ -947,9 +536,7 @@ bash init.sh
 ~/.openclaw/workspace
 ```
 
-可通过 `--instance-dir` 指定其他位置。
-
-已有角色文件不会被初始化过程主动覆盖；仅缺失文件会创建模板或骨架。
+可使用 `--instance-dir` 指定其他位置。
 
 ### 8.4 部署向导
 
@@ -957,16 +544,7 @@ bash init.sh
 python3 scripts/guided_setup.py
 ```
 
-向导处理：
-
-1. Python / atd / OpenClaw / 时区检查；
-2. 核心文件检查；
-3. API key 配置；
-4. Telegram token 与 chat id 绑定；
-5. Gateway Session 绑定；
-6. xiaodou-system 记忆契约配置；
-7. 最终校验；
-8. Gateway 配置生效。
+向导处理环境检查、核心文件、API key、Telegram 绑定、Gateway Session、记忆相关配置和最终校验。
 
 可用模式：
 
@@ -980,11 +558,6 @@ python3 scripts/guided_setup.py
 ```bash
 bash init.sh --instance-dir ./instance --install-cron
 ```
-
-当 `ALLOW_CRON_APPLY=1` 时：
-
-- root 用户写入 `/etc/crontab`；
-- 普通用户写入用户级 crontab。
 
 默认调度：
 
@@ -1000,15 +573,9 @@ bash init.sh --instance-dir ./instance --install-cron
 
 step03 依赖 `atd`。
 
-### 8.6 配置
+### 8.6 配置文件
 
-运行配置集中于：
-
-```text
-settings.yaml
-```
-
-主要配置域：
+运行配置集中在 `settings.yaml`，主要包括：
 
 ```text
 system
@@ -1020,8 +587,6 @@ selfie
 models
 delivery
 ```
-
-角色人格与生活内容应保留在 Markdown 文件中，而不是写入 Python 控制逻辑。
 
 ---
 
@@ -1045,150 +610,119 @@ delivery
 └── settings.example.yaml
 ```
 
-运行实例还会产生：
-
-```text
-daily/
-chatlog/
-daily_selfies/
-event journal
-transaction state
-backups/
-```
+运行实例还会产生 `daily/`、`chatlog/`、图像、事件日志、事务状态和备份。
 
 ---
 
-## 十、局限与后续工作
+## 十、当前限制
 
 ### 10.1 验证范围
 
-当前系统只在 Linux 环境完成端到端验证。
+当前仅在 Linux 环境完成端到端验证。尚未建立多发行版兼容矩阵、Windows / macOS 调度适配、长期 SLA、主动消息质量评测和系统化的多角色迁移测试。
 
-尚未建立：
+### 10.2 单日上下文长度
 
-- 多发行版兼容矩阵；
-- Windows / macOS 调度适配；
-- 长周期故障率与 SLA 数据；
-- 主动消息质量评测基准；
-- 不同角色之间的系统化迁移测试。
+系统希望在一个自然日内尽量保留完整 Session，但模型上下文仍存在硬上限。如果单日消息量或工具输出异常密集，仍可能在 rollover 前触发 Compaction。
 
-### 10.2 单日 Context Budget
+因此，高交互量场景仍需要进一步设计单日上下文预算和受控的中间处理机制。
 
-系统希望在一个自然日内尽量保持完整、未 compact 的 Session，但模型上下文窗口仍存在硬上限。
+### 10.3 平台与通道
 
-若单日消息量、工具输出或主动事件异常密集，仍可能在 rollover 前触发 compaction。当前版本因此不能把“每日 rollover”解释为对 compaction 的绝对消除。
+当前控制面依赖 `cron`、`at` 和 `flock`，正式验证的消息通道为 Telegram。其他平台和消息通道需要单独适配。
 
-高交互量场景后续需要：
+### 10.4 外部服务
 
-- 单日 context budget 监控；
-- 受控 day-internal checkpoint；
-- 或专门的 context adapter。
-
-### 10.3 平台依赖
-
-当前控制面依赖：
-
-```text
-cron
-at / atd
-flock
-```
-
-Windows 与 macOS 需要替换平台相关 scheduler / lock adapter，同时保持 DailyPlan、Event Model 与 Memory Pipeline 的数据契约不变。
-
-### 10.4 消息通道
-
-当前正式验证通道为 Telegram。
-
-其他消息通道需要单独验证：
-
-- 文本发送；
-- 媒体发送；
-- 身份绑定；
-- Session 映射；
-- 主动消息写回。
-
-### 10.5 外部模型与服务
-
-DeepSeek 与 Seedream 属于外部服务。模型名称、API、价格、速率限制与可用性可能变化，生产部署应通过 provider 配置管理。
+DeepSeek 与 Seedream 属于外部依赖。模型名称、API、价格、速率限制和服务可用性可能变化，应通过 provider 配置管理。
 
 ---
 
-## 十一、结论
+## 十一、总结
 
-xiaodou-system 将长期陪伴智能体建模为一个以自然日为边界的持续运行系统，而不是一个仅由用户输入驱动的对话接口。
-
-其核心状态转换为：
+xiaodou-system 将长期陪伴智能体组织为一个以自然日为主要运行边界的系统：
 
 ```text
-角色与历史状态
-        ↓
+历史状态
+    ↓
 DailyPlan
-        ↓
-Scheduled / Executed Events
-        ↓
-Working Session
-        ↓
-Daily Memory Compiler
-        ↓
-Consolidated Memory
-        ↓
-Session Rollover
-        ↓
+    ↓
+事件与主动交互
+    ↓
+完整当日 Session
+    ↓
+Daily Memory / MEMORY.md
+    ↓
+Session rollover
+    ↓
 下一自然日
 ```
 
-系统的主要工程贡献不在于重新实现 OpenClaw，也不在于提出新的语言模型算法，而在于明确了四个长期陪伴运行约束：
+OpenClaw 提供 Session、Memory、消息通道和调度等通用 Agent Runtime 能力；xiaodou-system 在其上增加角色生活规划、事件执行、主动消息状态管理和日终记忆整理，使这些原本独立的能力形成连续的每日运行过程。
 
-1. **角色内容与运行代码分离；**
-2. **生成模型与确定性控制面分离；**
-3. **Working Session 与 Consolidated Memory 分离；**
-4. **同一段历史只允许一条 canonical 的跨日语义转换路径。**
+当前实现的主要特点可以归纳为四点：
 
-OpenClaw 提供 Session、Memory、Search、Compaction、Channel 与 Automation 等通用 Agent Runtime 能力；xiaodou-system 在这些原语之上进一步定义时间模型、DailyPlan、事件状态机、主动交互事务以及跨日记忆协议。
+- 角色内容由 Markdown 文件定义，与调度和执行代码分离；
+- DailyPlan 同时描述当天生活状态和未来事件，而不只是定时任务；
+- 当前 Session 尽量保留当天完整对话，跨日记忆由 step04 统一整理；
+- 主动消息、Session 注入与状态回写均留下明确运行记录，以支持幂等与异常恢复。
 
-对于陪伴式智能体而言，真正需要维持的并不是“历史数据仍然存在”，而是角色能够在不依赖用户显式提醒的情况下，将昨天自然地带入今天。
-
----
+当前版本已经在 Linux + OpenClaw + Telegram 环境完成主要链路验证，但仍受单日上下文长度、平台相关调度机制和单一消息通道验证范围限制。后续工作主要包括跨平台调度适配、更长周期稳定性验证、更多消息通道以及高交互量场景下的上下文管理。
 
 ## 参考资料
 
-1. Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. **Generative Agents: Interactive Simulacra of Human Behavior**. arXiv:2304.03442, 2023.  
+1. Shum, H.-Y., He, X., & Li, D. **From Eliza to XiaoIce: Challenges and Opportunities with Social Chatbots**. arXiv:1801.01957, 2018.  
+   https://arxiv.org/abs/1801.01957
+
+2. Zhou, L., Gao, J., Li, D., & Shum, H.-Y. **The Design and Implementation of XiaoIce, an Empathetic Social Chatbot**. arXiv:1812.08989, 2018.  
+   https://arxiv.org/abs/1812.08989
+
+3. Zhang, S., Dinan, E., Urbanek, J., Szlam, A., Kiela, D., & Weston, J. **Personalizing Dialogue Agents: I have a dog, do you have pets too?** arXiv:1801.07243, 2018.  
+   https://arxiv.org/abs/1801.07243
+
+4. Shuster, K., Xu, J., Komeili, M., et al. **BlenderBot 3: a deployed conversational agent that continually learns to responsibly engage**. arXiv:2208.03188, 2022.  
+   https://arxiv.org/abs/2208.03188
+
+5. Zhong, W., Guo, L., Gao, Q., Ye, H., & Wang, Y. **MemoryBank: Enhancing Large Language Models with Long-Term Memory**. arXiv:2305.10250, 2023.  
+   https://arxiv.org/abs/2305.10250
+
+6. Park, J. S., O'Brien, J. C., Cai, C. J., Morris, M. R., Liang, P., & Bernstein, M. S. **Generative Agents: Interactive Simulacra of Human Behavior**. arXiv:2304.03442, 2023.  
    https://arxiv.org/abs/2304.03442
 
-2. Packer, C., Wooders, S., Lin, K., Fang, V., Patil, S. G., Stoica, I., & Gonzalez, J. E. **MemGPT: Towards LLMs as Operating Systems**. arXiv:2310.08560, 2023.  
-   https://arxiv.org/abs/2310.08560
+7. Maharana, A., Lee, D., Tulyakov, S., Bansal, M., Barbieri, F., & Fang, Y. **Evaluating Very Long-Term Conversational Memory of LLM Agents**. arXiv:2402.17753, 2024.  
+   https://arxiv.org/abs/2402.17753
 
-3. Li, H., Yang, C., Zhang, A., Deng, Y., Wang, X., & Chua, T.-S. **Hello Again! LLM-powered Personalized Agent for Long-term Dialogue**. arXiv:2406.05925, 2024.  
+8. Li, H., Yang, C., Zhang, A., Deng, Y., Wang, X., & Chua, T.-S. **Hello Again! LLM-powered Personalized Agent for Long-term Dialogue**. arXiv:2406.05925, 2024.  
    https://arxiv.org/abs/2406.05925
 
-4. OpenClaw Documentation. **Agent workspace / Context**.  
-   https://docs.openclaw.ai/concepts/agent-workspace  
-   https://docs.openclaw.ai/concepts/context
+9. Li, Y., et al. **LoCoMo-Plus: Beyond-Factual Cognitive Memory Evaluation for Long-Term Conversational Agents**. arXiv:2602.10715, 2026.  
+   https://arxiv.org/abs/2602.10715
 
-5. OpenClaw Documentation. **The main session / Session management**.  
-   https://docs.openclaw.ai/concepts/main-session  
-   https://docs.openclaw.ai/concepts/session
-
-6. OpenClaw Documentation. **Session management & compaction**.  
-   https://docs.openclaw.ai/reference/session-management-compaction
-
-7. OpenClaw Documentation. **Memory**.  
-   https://docs.openclaw.ai/concepts/memory
-
-8. OpenClaw Documentation. **Dreaming**.  
-   https://docs.openclaw.ai/concepts/dreaming
-
-9. OpenClaw Documentation. **Active Memory**.  
-   https://docs.openclaw.ai/concepts/active-memory
-
-10. OpenClaw Documentation. **Context / Compaction**.  
+10. OpenClaw Documentation. **Agent workspace / Context**.  
+    https://docs.openclaw.ai/concepts/agent-workspace  
     https://docs.openclaw.ai/concepts/context
 
-11. OpenClaw Documentation. **Telegram channel**.  
+11. OpenClaw Documentation. **The main session / Session management**.  
+    https://docs.openclaw.ai/concepts/main-session  
+    https://docs.openclaw.ai/concepts/session
+
+12. OpenClaw Documentation. **Session management & compaction**.  
+    https://docs.openclaw.ai/reference/session-management-compaction
+
+13. OpenClaw Documentation. **Memory**.  
+    https://docs.openclaw.ai/concepts/memory
+
+14. OpenClaw Documentation. **Dreaming**.  
+    https://docs.openclaw.ai/concepts/dreaming
+
+15. OpenClaw Documentation. **Active Memory**.  
+    https://docs.openclaw.ai/concepts/active-memory
+
+16. OpenClaw Documentation. **Context / Compaction**.  
+    https://docs.openclaw.ai/concepts/context
+
+17. OpenClaw Documentation. **Telegram channel**.  
     https://docs.openclaw.ai/channels/telegram
 
-12. OpenClaw Documentation. **Automations**.  
+18. OpenClaw Documentation. **Automations**.  
     https://docs.openclaw.ai/automation/cron-jobs
 
 > OpenClaw 相关能力边界按 **2026-08-16** 的官方文档核查。后续版本可能调整默认 Session、Memory、Compaction 或调度行为，部署时应以所安装版本的官方文档为准。
