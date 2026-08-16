@@ -11,76 +11,89 @@
 
 ## Abstract
 
-**xiaodou-system** is a **persona-agnostic runtime framework** built on [OpenClaw](https://docs.openclaw.ai) for long-term companionship scenarios. The system splits a natural day into three independently inspectable stages: **daily planning (step02) → scheduling and proactive outreach (step03) → day-end memory consolidation (step04)**. Persona content is described by Markdown files in the workspace; scheduling, validation, state transitions, persistence, and failure recovery are handled by Linux scheduling primitives and Python scripts.
+**xiaodou-system** is a persona-agnostic runtime framework built on [OpenClaw](https://docs.openclaw.ai) for long-term companionship scenarios. It takes the "natural day" as its basic operational cycle and organizes persona definition, daily life planning, scheduled event execution, proactive message sending, session state, day-end memory consolidation, and cross-day state handover into a closed loop. Its goal is not to extend the general reasoning ability of language models, but to establish an auditable, recoverable, and portable long-term operating mechanism for companion agents.
 
-The project is not concerned with improving the reasoning ability of language models themselves, but with solving the operational problems of long-term companion agents: how a persona can maintain an executable schedule without immediate user input; how proactive messages can be incorporated into a trackable event state; how the previous day's important experiences can participate in the current interaction on the next day **without the user having to explicitly request retrieval**; and how to avoid session compaction, long-term memory distillation, and the session lifecycle each producing mutually inconsistent representations of history.
+Unlike typical reactive dialogue systems, xiaodou-system does not treat the user's current message as the only starting point of behavior. At the start of each day, the persona generates that day's life trajectory from its identity, life routines, recent memory, weather, and the previous day's state; a deterministic scheduling system then executes the corresponding events at future time points and proactively reaches out to the user when interaction conditions are met; at day end, the complete session, plan, event execution results, and proactive message records are uniformly consolidated into cross-day state that the next natural day can consume directly. This forms:
 
-Three concepts need to be distinguished here: **memory being persisted (Persistence) does not mean it will be retrieved (Retrieval), and memory being retrievable does not mean the persona has continuity (Continuity)**. OpenClaw currently provides generic capabilities such as memory files, memory search, Active Memory, session transcripts, compaction, Dreaming, and Automations [4–10]; xiaodou-system does not re-implement this infrastructure, but rather adds, on top of it, a **natural-day lifecycle and single memory authority** for companion personas: the full session of the day serves as high-fidelity working memory, and cross-day memory is generated solely by the project's own step04; a controlled rollover then follows.
+```text
+Persona definition and historical state
+        ↓
+Daily planning
+        ↓
+Scheduled events and proactive interaction
+        ↓
+Complete daily session and event evidence
+        ↓
+Day-end memory compilation
+        ↓
+Controlled session rollover
+        ↓
+Next natural day
+```
 
-Existing research has separately demonstrated the feasibility of LLM-based agents for **memory, reflection, planning, and long-term cross-session interaction**: Generative Agents uses memory, reflection, and planning for sustained behavior simulation [1]; MemGPT supports long-horizon dialogue through hierarchical memory management [2]; and LD-Agent further studies event memory and dynamic persona modeling in long-term dialogue [3]. xiaodou-system does not attempt to replace this model-level research; rather, it provides a deployable engineering implementation that organizes persona configuration, schedule generation, system-level scheduling, proactive messages, full session evidence, and day-end memory into a fixed pipeline.
+This project adopts a "generation plane vs. control plane separation" design. Generative models such as DeepSeek and Seedream are responsible for plan, text, and image content; scheduling, schema validation, event idempotency, concurrency locking, transaction state, persistence, and session boundaries are deterministically controlled by Python scripts and Linux system facilities. The "determinism" referred to in this document only means that control flow and state transitions follow explicit rules; it does not mean that language model or image model outputs can be reproduced identically on each run.
 
-The current implementation uses **Linux + OpenClaw + Telegram** as its validation environment, with DeepSeek by default as the text model and Seedream as the image generation service. External services are encapsulated uniformly through `providers/`; runtime data is persisted via JSON Schema, YAML configuration, event logs, and Markdown memory files. Language and image models remain generative components, so the term "deterministic" in this document refers only to **the determinism of control flow, data contracts, and state management**, not to run-to-run consistency of model text or image outputs. The current conclusions come from end-to-end validation in a single deployment environment and do not represent cross-platform performance, model quality, or production-grade SLA.
+Regarding long-term memory, the system distinguishes **Persistence**, **Retrieval**, and **Continuity**. The fact that a history record is written to disk does not mean it will necessarily be used by the model in the next natural interaction; even if history can be re-acquired by search, that is not equivalent to the persona naturally carrying forward the previous day's state without user prompting. To this end, xiaodou-system treats the current natural day's complete Session as high-fidelity working memory and stipulates that cross-day semantics are generated only through the project's own day-end memory pipeline, thereby avoiding the same history being interpreted by multiple independent summarization mechanisms at once.
 
-## I. Problem Definition and Design Scope
+Existing research has separately validated the importance of memory, reflection, planning, and long-term dialogue state for persistent agents [1][2][3]. xiaodou-system does not propose new model algorithms; instead it implements these requirements as a deployable engineering system. The current implementation uses **Linux + OpenClaw + Telegram** as its validation environment, with DeepSeek by default as the text model and Seedream as the image generation service.
 
-### 1.1 The Engineering Problem of Long-Term Companion Agents
+**Keywords:** long-term companion agent; proactive interaction; cross-day memory; session lifecycle; event state machine; OpenClaw; deterministic orchestration
 
-Large language models can produce coherent multi-turn dialogue, but "being able to converse" and "being able to run over the long term" are not the same problem. Long-term agents usually also need to explicitly handle time, cross-session memory, behavioral plans, and external state. Relevant research has shown that memory retrieval, reflection, and planning directly affect the behavioral continuity of long-term agents [1][2]; work on long-term dialogue also models event memory and persona management as separate modules [3].
+---
 
-xiaodou-system scopes the problem to five engineering goals:
+## I. Research Background and Problem Definition
 
-1. **Temporal Proactivity**  
-   Without an immediate user message, the system can still generate future events from the day's plan and decide at a scheduled time whether to reach out.
+### 1.1 From Reactive Dialogue to Sustained Operation
 
-2. **Cross-day Continuity**  
-   Yesterday's important events should not merely "exist in some searchable file or transcript"; they should directly influence the Planner, event judgment, and interpretation of current short utterances on the next natural day. For companion-style interaction, `Persistence ≠ Retrieval ≠ Continuity`.
+Large language models can already generate coherent multi-turn dialogue, but "being able to converse" and "being able to persist over the long term as a persona" belong to different levels of problem.
 
-3. **Single Memory Authority**  
-   The same history should not be generated by multiple uncoordinated summarization systems and then participate in reasoning over the long term. The day's full session serves as raw working memory; cross-day consolidated memory is generated solely by xiaodou-system's day-end pipeline.
+A typical dialogue system can be abstracted as:
 
-4. **Operational Determinism**  
-   Scheduling, validation, idempotency, locking, state write-back, and archiving should be controlled by deterministic programs. The generative model is responsible for generating content, not for deciding whether key files are written or whether the same event executes twice.
+```text
+User Message
+    ↓
+Model
+    ↓
+Response
+```
 
-5. **Role Portability**  
-   Personality, identity, life routines, and user relationships should be represented as much as possible as workspace files rather than hardcoded into Python scripts. When changing personas, in principle only the persona contract and resource configuration need to be replaced.
+This structure defaults to each turn of behavior being triggered by the user message; the model only needs to interpret the current context and produce a reply. Long-term companionship scenarios additionally require the system to handle time, cross-session state, proactive behavior, long-term memory, and the persona's own life trajectory. When the user has not sent a message, the persona still needs internal state such as current time, location, activity, and emotion; when the user reappears the next day, the important events of the previous day should also continue to influence the conversation, rather than degenerating into an archive that can only be restored through explicit retrieval.
 
-### 1.2 Relationship to OpenClaw
+Generative Agents demonstrated the feasibility of sustained behavior simulation through the combination of memory, reflection, and planning [1]; MemGPT treats memory management in long-horizon interaction as an independent problem [2]; LD-Agent further studied event memory and dynamic persona in long-term dialogue [3]. Together these works show that long-term agents cannot rely only on the current dialogue window, but need explicit time and memory structures.
 
-OpenClaw already provides a complete agent runtime foundation, including workspace, Gateway-owned sessions, persistent memory, memory search, Active Memory, message channels such as Telegram, and a built-in Automations scheduler [4–10]. Therefore, xiaodou-system is **not a re-implementation of OpenClaw**.
+### 1.2 Five Engineering Constraints in Companionship Scenarios
 
-What this project adds is a set of runtime protocols specific to "daily life trajectory + proactive outreach + day-end memory":
+xiaodou-system reduces the problem of long-term companionship operation to the following five constraints.
 
-- organizing a natural day into fixed step02 / step03 / step04 stages;
-- using `daily/YYYY-MM-DD.json` as the explicit data object for the day's plan and execution state;
-- structurally validating generation results with JSON Schema;
-- using Linux `cron` and `at` as the external scheduling layer of the current implementation;
-- managing duplicate execution and concurrency with idempotency gates, `flock`, transactional write-back, and event logs;
-- treating the current natural day's session as high-fidelity working memory;
-- using the project's custom step04 as the **single cross-day memory compilation path**;
-- performing a controlled session rollover only after the day-end memory has completed its main persistence steps.
+#### Temporal Proactivity
 
-OpenClaw's current detailed daily notes are read on demand in ordinary turns mainly through `memory_search` / `memory_get` [6]; Active Memory can proactively recall long-term information in the interaction path, but the default `escalate` mode still relies primarily on a strong triggered hit or "the current message expresses recall intent" as its launch condition [7]. This is a reasonable cost-and-latency trade-off for general agents, but it cannot guarantee that short utterances in companionship scenarios — such as "I've arrived," "I'm out now," "it's over" — which rely heavily on yesterday's context yet lack explicit retrieval cues, will always obtain the needed history.
+The system must be able to generate future events from the day's plan without immediate user input, and decide at a specified time whether to proactively reach out. Proactive behavior should originate from life state that the persona already has that day, not from asking the model on the spot each time "should we say something now."
 
-OpenClaw's default AGENTS template currently requires reading today's and yesterday's daily notes along with `MEMORY.md` at the start of a new session [8], and `/new` / `/reset` can also re-supply recent daily memory in the first turn of a new session [9]. These mechanisms improve recovery across session boundaries, but they still depend on the relevant content **having already been correctly written into daily memory**, and they do not replace application-level control over "when, by whom, and under what rules the day's full conversation is compiled into cross-day state."
+#### Cross-day Continuity
 
-### 1.3 Non-Goals
+Yesterday's important experiences must be able to directly influence the next natural day's planning and interaction. For extremely short messages with high dependence on prior events — such as "I've arrived," "I'm out now," "it's over" — the system must not require the user to explicitly say "go look up what happened yesterday" before restoring correct context.
 
-The current version does not address the following:
+#### Single Memory Authority
 
-- It does not claim that the persona possesses consciousness or a real life in the human sense;
-- It does not guarantee deterministic LLM / image model outputs;
-- It does not provide cross-platform compatibility guarantees;
-- It does not use chat-quality benchmarks, emotional companionship effects, or user studies as current conclusions;
-- It does not equate this project's 7-file persona contract with OpenClaw's default workspace conventions;
-- It does not deny the general value of OpenClaw's native memory / compaction / Active Memory; the project only explains that they target different goals from the memory-consumption strategy of a companion persona.
+The same history should not be long-term interpreted by multiple mutually independent summarization systems. If session compaction, memory flush, and the day-end memory model each form a different summary of the same conversation, they can differ in timing, causality, uncompleted items, relationship state, or information priority. xiaodou-system therefore requires exactly one formal conversion path for cross-day semantics.
 
-## II. System Design
+#### Operational Determinism
 
-### 2.1 Separating the Persona Contract from the Runtime Framework
+Whether an event executes twice, whether a message has already been sent, whether a Session may roll over, whether a memory file was written successfully — these must be decided by program state, not by the model's on-the-spot judgment.
 
-xiaodou-system centralizes persona definition in 7 core Markdown files in the workspace:
+#### Role Portability
 
-| File | Responsibility in xiaodou-system |
+Personality, identity, life routines, and user relationships should be expressed as readable, editable persona files rather than hardcoded into execution scripts. The framework should keep the core runtime protocol unchanged when the persona is replaced.
+
+---
+
+## II. System Model and Design Principles
+
+### 2.1 Persona Model
+
+xiaodou-system defines the persona using 7 core Markdown files in the workspace:
+
+| File | Responsibility |
 |---|---|
 | `AGENTS.md` | Operating rules and persona-side behavioral constraints |
 | `IDENTITY.md` | Identity and stable background information |
@@ -90,82 +103,145 @@ xiaodou-system centralizes persona definition in 7 core Markdown files in the wo
 | `TOOLS.md` | Tools and runtime environment description |
 | `MEMORY.md` | Consolidated long-term memory |
 
-These 7 files constitute xiaodou-system's **persona contract**. Some of them also belong to OpenClaw's workspace / memory system; content such as `LIFE.md` is read by the project's own Planner and scripts. The set of workspace bootstrap files currently injected by default per the OpenClaw official documentation is not identical to this project's "7-file contract" [4], so the two should not be conflated.
+Code does not branch on a persona's name, experiences, or expression style. Persona differences enter the generation stage, while scheduling, state transition, and persistence logic remain consistent.
 
-System code does not in principle branch on a specific persona's name, experiences, or expression style. Persona differences enter the generation stage, while scheduling and persistence logic remain consistent.
+Among them, `LIFE.md` describes stable life routines and `MEMORY.md` describes cross-day long-term state; together they participate in constructing a new DailyPlan. Replacing the set of persona files yields a different persona without modifying the main pipeline.
 
-### 2.2 Separating the Control Plane from the Generation Plane
+### 2.2 Time Model
 
-The system divides runtime responsibilities into two categories:
-
-- **Generation plane**: DeepSeek is responsible for plan, text, and memory-related generation; Seedream is responsible for optional selfie image generation.
-- **Control plane**: Python scripts, JSON Schema, `cron`, `at`, `flock`, event logs, and transaction state decide when to execute, whether input is valid, whether an event has already been executed, and how results are persisted.
-
-The purpose of this division is not to eliminate uncertainty from generative models, but to move control logic that should not be decided by the model out of the model context.
-
-### 2.3 External Dependency Abstraction
-
-All external services are encapsulated through `providers/`. The current implementation includes:
-
-- `providers/llm/deepseek_urllib.py`
-- `providers/llm/openai_compatible.py`
-- `providers/image/seedream.py`
-- `providers/openclaw_gateway.py`
-- `providers/gateway_history.py`
-- `providers/gateway_sessions.py`
-- `providers/telegram.py`
-- `providers/base.py`
-
-Business scripts depend only on provider interfaces and do not scatter third-party API details throughout the core flow. This design reduces the blast radius when replacing models, message channels, or the Gateway integration.
-
-### 2.4 Memory Consumption Contract and Single Memory Authority
-
-xiaodou-system does not treat "the file has been written to disk" as a sufficient condition for memory continuity. The system distinguishes three states:
+The system treats a natural day as an explicit operational unit:
 
 ```text
-Persistence  Whether the memory still exists
-Retrieval    Whether the current run can find it
-Continuity   Whether the persona uses it naturally without user prompting
+Day N
+├── DailyPlan
+├── Scheduled Events
+├── Executed Events
+├── User Interactions
+├── Working Session
+└── Daily Memory
 ```
 
-For general agents, on-demand retrieval is usually sufficient; for companion personas, recent experiences usually need to enter the interpretive context before the user's current question. For example, the user said yesterday, "I have an exam tomorrow afternoon," and today only sends "I'm heading out." The current message itself does not constitute a strong retrieval query, but its reasonable interpretation depends heavily on yesterday's state.
-
-Therefore, this project adopts a two-layer memory responsibility:
+This means "time" is not merely a cron timestamp, but part of the persona's state. A 17:45 event is not just "execute a task at 17:45," but:
 
 ```text
-Working Memory
-= the full OpenClaw session of the current natural day
-= retains the day's raw conversations and proactive messages
-
-Consolidated Memory
-= daily memory + MEMORY.md
-= generated solely by xiaodou-system step04 from the day's evidence
+Today's persona
+    ↓
+has already experienced the day's preceding activities
+    ↓
+reaches the 17:45 life event
+    ↓
+decides whether to interact with the user based on current state
 ```
 
-More distant information that has not entered the recent working set can still be retrieved on demand through mechanisms such as OpenClaw memory search; but **yesterday's important state should not depend on the user explicitly saying "go look up yesterday" to enter current reasoning**.
+The DailyPlan therefore serves as the "world state of the day," not merely a task list.
 
-This design also prescribes the authoritative path for history representation:
+### 2.3 Memory Model
+
+The system distinguishes two types of memory.
+
+#### Working Memory
 
 ```text
-Full session
-    + DailyPlan
-    + Event Journal
-    + Proactive message records
-            ↓
-      xiaodou step04
-            ↓
-   DailyMemory / MEMORY.md
-            ↓
-        Next natural day
+The complete OpenClaw Session of the current natural day
 ```
 
-The project does not want the same cross-day history to have both an OpenClaw compaction summary and a xiaodou-system Memory Compiler as two long-term semantic sources. Even if both summaries are "basically correct," they can still differ in event details, uncompleted items, timing, relationship state, or information priority, thereby forming dual memory authority.
+Its characteristics:
+
+- retains the day's raw interactions;
+- retains proactive outreach and subsequent user replies;
+- avoids cross-day semantic compression before day end as far as possible;
+- serves as the high-fidelity evidence source for that day's facts.
+
+#### Consolidated Memory
+
+```text
+Daily Memory + MEMORY.md
+```
+
+Its characteristics:
+
+- generated uniformly by step04;
+- represents history state that has completed day-end consolidation;
+- directly participates in the next natural day's Planner and interaction context;
+- periodically deduplicated, merged, and compressed.
+
+There is only one formal conversion path between the two:
+
+```text
+Complete Working Session
++ DailyPlan
++ Event Journal
++ Proactive messages and user interactions
+        ↓
+step04
+        ↓
+Daily Memory / MEMORY.md
+```
+
+### 2.4 Persistence, Retrieval, and Continuity
+
+A long-term companionship system cannot treat "the data still exists" as directly equivalent to "the persona still remembers."
+
+```text
+Persistence
+= whether the information is still physically saved
+
+Retrieval
+= whether the current run can find that information again
+
+Continuity
+= whether the persona can naturally use it without user prompting
+```
+
+These three levels must be handled separately.
+
+For example:
+
+```text
+Yesterday:
+"I have an exam tomorrow afternoon."
+
+Today:
+"I'm heading out now."
+```
+
+The second sentence contains almost no strong semantic retrieval cues, yet its reasonable interpretation depends on yesterday's exam arrangement. If the system only restores history after the user appends "go look up what we said yesterday," then Persistence and Retrieval may both have succeeded, but Continuity has failed.
+
+Therefore, xiaodou-system treats "yesterday's important state" as direct input to the next natural day, not merely as a searchable archive.
+
+### 2.5 Generation Plane and Control Plane
+
+The system clearly separates generation capability from operational control.
+
+**Generation plane:**
+
+- DailyPlan content generation;
+- message copy generation;
+- Daily Memory content generation;
+- Seedream image generation.
+
+**Control plane:**
+
+- scheduled triggering;
+- schema validation;
+- idempotency judgment;
+- `flock` concurrency locking;
+- transaction state;
+- file persistence;
+- Session rollover;
+- failure recovery.
+
+Its design principle can be summarized as:
+
+> **Generative intelligence inside deterministic boundaries.**
+
+The model is responsible for "what to generate"; the program is responsible for "when to generate, whether execution is allowed, whether it has already been executed, where results are written, and how to recover after failure."
 
 ---
 
-## III. System Architecture
+## III. Overall Architecture
 
-### 3.1 Overall Architecture
+### 3.1 Architecture Composition
 
 <p align="center">
   <img src="docs/architecture.svg" alt="xiaodou-system architecture" width="880"/>
@@ -173,11 +249,59 @@ The project does not want the same cross-day history to have both an OpenClaw co
   <em>Fig. 1: Overall system architecture — three business pipelines with a persistent layer running throughout</em>
 </p>
 
-The system consists of three business pipelines serialized in time. `providers/` sits at the external service boundary; the workspace, daily, chatlog, memory, event logs, and configuration files constitute persistent state; Linux scheduling primitives trigger the deterministic scripts.
+The system consists of four layers:
 
-### 3.2 step02: Daily Planning
+- **Persona contract layer**: the 7 Markdown files;
+- **Business pipeline layer**: step02, step03, step04;
+- **External dependency layer**: LLM, image service, OpenClaw Gateway, message channels;
+- **Infrastructure and persistence layer**: Linux, `cron`, `at`, `flock`, daily, chatlog, MEMORY, logs, and backups.
 
-**Trigger time: 06:00**
+### 3.2 External Dependency Abstraction
+
+Third-party services are uniformly encapsulated in `providers/`:
+
+```text
+providers/
+├── llm/
+│   ├── deepseek_urllib.py
+│   └── openai_compatible.py
+├── image/
+│   └── seedream.py
+├── openclaw_gateway.py
+├── gateway_history.py
+├── gateway_sessions.py
+├── telegram.py
+└── base.py
+```
+
+Business logic depends on provider interfaces rather than directly on the specific SDK of a model vendor or messaging service. This allows replacing external implementations while keeping the DailyPlan, Event Model, and Memory Pipeline unchanged.
+
+### 3.3 Persistent State
+
+Primary persistence targets include:
+
+```text
+workspace/
+MEMORY.md
+daily/
+daily/YYYY-MM-DD.json
+chatlog/
+daily_selfies/
+event journal
+transaction state
+settings.yaml
+backups/
+```
+
+The system prefers writing key state to structured files or logs rather than keeping it only in the current model context.
+
+---
+
+## IV. Natural-Day Operating Mechanism
+
+### 4.1 step02: Daily Planning
+
+**Default trigger time: 06:00**
 
 Primary scripts:
 
@@ -188,12 +312,14 @@ Primary scripts:
 - `schema_validator.py`
 - `weather_provider.py`
 
-Primary inputs include:
+Input:
 
-- the 7 persona core files;
-- the day's weather;
-- the last 7 days of memory;
-- yesterday's execution results.
+```text
+Persona core files
++ the day's weather
++ the last 7 days of memory
++ yesterday's execution results
+```
 
 Output:
 
@@ -201,11 +327,20 @@ Output:
 daily/YYYY-MM-DD.json
 ```
 
-This file describes the day's activities, locations, emotional states, and outreach windows. Model-generated output must pass the corresponding JSON Schema before proceeding to the next stage; validation failures are retried per the established policy. This guarantees **structural contract validity**, not that two model calls produce the same plan.
+The DailyPlan describes:
 
-### 3.3 step03: Scheduling and Event Execution
+- the day's activities;
+- locations;
+- emotional states;
+- outreach windows;
+- silent / non-silent events;
+- possible media behaviors such as selfies.
 
-**Morning scheduling trigger: 06:20**
+Model-generated output must pass JSON Schema validation before proceeding to the next stage. The schema guarantees structural contract validity; it does not guarantee that text semantics are fully correct, nor that identical input produces identical plans.
+
+### 4.2 step03: Scheduling and Event Execution
+
+**Morning scheduling time: 06:20**
 
 Primary scripts:
 
@@ -220,43 +355,47 @@ Primary scripts:
 - `context_snapshot.py`
 - `event_journal.py`
 
-Execution proceeds in two stages:
+The morning stage reads the DailyPlan and submits the non-silent events that need to be executed to the system `at`.
 
-1. A morning script reads the day's plan and submits the non-silent events that need to be executed via `at_adapter.py` to the system `at`;
-2. When the target time arrives, `execute_daily_event.py` executes the event transaction for a single event.
-
-The typical chain for a single event:
+When a single event reaches its trigger time, it runs through the following path:
 
 ```text
-Read the plan and context
-    ↓
-Idempotency check / acquire lock
-    ↓
-Evaluate whether the current event should still be sent
-    ↓
-Generate message text
-    ↓
-Optional: call Seedream to generate an image
-    ↓
-Send via Telegram
-    ↓
-Write into the OpenClaw session context
-    ↓
-Transaction state and event log write-back
+Read DailyPlan and context
+        ↓
+Idempotency check
+        ↓
+Acquire flock
+        ↓
+Build Context Snapshot
+        ↓
+Decide whether the current event should still execute
+        ↓
+Generate message
+        ↓
+Optional: Seedream image generation
+        ↓
+Send Telegram
+        ↓
+Write into the OpenClaw Session
+        ↓
+Event Journal / Transaction write-back
 ```
 
-Key constraints include:
+An event is not a single "success / failure" boolean. The generate, send, inject, and final commit steps are each recorded, to support partial-failure recovery.
 
-- stable event identity;
-- idempotency against duplication;
-- `flock` mutual exclusion;
-- write-back of send results and failure states;
-- event-level logging;
-- separate recording of "generated," "sent," and "injected" states.
+For example:
 
-### 3.4 step04: Day-End Memory and the Session Commit Boundary
+```text
+delivery = succeeded
+injection = failed
+transaction = partial
+```
 
-step04 consolidates the raw evidence of the end of a natural day into long-term state that the next natural day can consume directly. The current default schedule is:
+In this case, recovery can only redo the Session injection, not resend the Telegram message, otherwise duplicate outreach may occur.
+
+### 4.3 step04: Day-End Memory Compilation
+
+Default schedule:
 
 ```text
 00:20 / 00:50  finalize
@@ -277,111 +416,120 @@ Primary scripts:
 - `memory_quality.py`
 - `rollover_artifacts.py`
 
-The day-end input includes not only chat text but:
-
-- the full session of the current natural day;
-- the plan and execution state in `daily/YYYY-MM-DD.json`;
-- the step03 event journal / transaction state;
-- the proactive messages actually sent;
-- subsequent user replies;
-- associable artifacts such as that day's images.
-
-Its responsibilities, in order, cover:
-
-1. summarizing the previous day's conversations and events to generate daily memory;
-2. incrementally consolidating new information into long-term memory;
-3. writing qualifying results into `MEMORY.md`;
-4. performing session rollover after the aforementioned cross-day memory processing;
-5. periodically compressing the long-term memory body to keep it within the project's capacity limits.
-
-Here `session_rollover` should not be understood as an ordinary "cleanup of history" operation. It bears the **Memory Commit Boundary**: the current session is treated as high-fidelity working memory within a natural day; only after the day-end pipeline has completed its main memory persistence steps does a new session begin. The goal is to make "the day's full session → xiaodou-system Memory Compiler" the single formal conversion path for cross-day history.
-
-OpenClaw currently no longer auto-resets daily by default; daily / idle reset are optional policies [9][10]. xiaodou-system nevertheless retains a daily rollover as an active application-layer choice: rather than letting a session grow indefinitely and eventually continuing on a compaction summary, the project prefers to retain the full session within a single day and then perform its own memory consolidation at a clear day boundary.
-
-OpenClaw compaction summarizes earlier history into a persistent `compaction` entry; later turns run on that summary plus recent uncompressed messages [10][11]. Before compaction, OpenClaw can also run an automatic memory flush that writes context the model judges important into memory files [5]. These mechanisms suit general long sessions, but if enabled alongside xiaodou-system's own daily memory compiler, they can form two mutually independent history summaries. The project therefore treats **avoiding cross-day dual summary authority** as an important constraint in session lifecycle design.
-
-### 3.5 Persistence and Audit
-
-Primary persistence targets include:
+Day-end input includes:
 
 ```text
-workspace/
-MEMORY.md
-daily/
-daily/YYYY-MM-DD.json
-daily memory
-chatlog/
-settings.yaml
-event journal / transaction state
-backups / rollover artifacts
+Complete daily Session
++ DailyPlan
++ Actual event execution state
++ Event Journal
++ Proactive messages
++ User replies
++ Day artifacts
 ```
 
-The system design requires key state to be recorded as files or structured data where possible, rather than existing only in the current model context. This allows re-evaluating runtime state after a process exit, session rollover, or a single model-call failure.
+Its output is not a simple chat summary, but an episode-level cross-day state representation. The system needs to answer:
+
+- what was planned today;
+- which events actually occurred;
+- which events were suppressed;
+- what the persona proactively said;
+- how the user replied;
+- which state still affects the next day;
+- which information should enter long-term MEMORY.
+
+### 4.4 Session Rollover
+
+xiaodou-system treats each daily Session as that day's high-fidelity working memory.
+
+Rollover must occur after the main memory processing:
+
+```text
+Day N Complete Session
+        ↓
+Daily Memory
+        ↓
+MEMORY update
+        ↓
+Main persistence completes
+        ↓
+Session Rollover
+        ↓
+Day N+1
+```
+
+Its key constraint is:
+
+> **Memory processing precedes rollover.**
+
+The purpose of rollover is not to forget, nor because the Session "expired," but to establish a clear natural-day boundary and, before a long Session enters an uncontrollable historical summary, hand that day's complete evidence to the single cross-day Memory Pipeline.
+
+### 4.5 The Cross-Day Closed Loop
+
+```text
+Yesterday's Consolidated Memory
+        ↓
+Today's Planner
+        ↓
+DailyPlan
+        ↓
+Scheduled Events
+        ↓
+Actual Events + Conversation
+        ↓
+Working Session
+        ↓
+Daily Memory Compiler
+        ↓
+New Consolidated Memory
+        ↓
+Rollover
+        ↓
+Next natural day
+```
+
+Daily Memory is therefore used not only to preserve the past, but to construct the future state.
 
 ---
 
-## IV. Determinism Boundary and Fault Handling
+## V. OpenClaw Capability Boundaries and Adaptability Analysis
 
-### 4.1 Data Contracts
+### 5.1 OpenClaw's Basic Capabilities
 
-The project uses JSON Schema to constrain cross-stage data. There are currently 19 schemas that restrict the structure of plans, events, and related intermediate artifacts.
+As of 2026-08-16, OpenClaw already has generic infrastructure highly relevant to this project, including:
 
-Schema validation handles:
+- Agent workspace and context files [4];
+- Gateway-owned Session and transcripts [5][6];
+- Markdown memory, memory search, and memory-core [7];
+- Dreaming and consolidation [8];
+- Active Memory [9];
+- Compaction and automatic memory flush [7][10];
+- message channels such as Telegram [11];
+- the Automations scheduler [12].
 
-- missing required fields;
-- type errors;
-- out-of-range enum values;
-- model outputs that do not conform to the protocol.
+Therefore, xiaodou-system does not re-implement a generic Agent Runtime. Its addition lies at a higher application-semantic layer:
 
-Schemas do not judge whether text content is "true" or "natural."
+```text
+OpenClaw
+provides Agent Runtime primitives
 
-### 4.2 Idempotency and Concurrency
+        ↓
 
-step03 adds stable identity, state checks, and `flock` to event execution. Its goal is to avoid the same logical event being sent more than once on cron re-entry, duplicate `at` triggers, or manual reruns.
+xiaodou-system
+defines the natural-day lifecycle of a companion persona
+```
 
-### 4.3 Transaction State
+The relationship between the two is not "OpenClaw lacks a feature, so we build a new set of features," but "OpenClaw's generic mechanisms cannot automatically derive the time, event, and cross-day state constraints that a companion persona needs."
 
-Sending a message is an external side effect, so event execution cannot simply be represented by "did the script exit 0." The system records the generate, send, inject, and write-back steps separately, so that after a failure it can identify which side effects have already occurred and decide the retry boundary accordingly.
+### 5.2 Native Memory and Cross-Day Continuity
 
-### 4.4 Backup, Recovery, and Rollover
+OpenClaw memory files can be persisted and retrieved by `memory_search` / `memory_get`; Active Memory can also proactively recall history in qualifying interactions [7][9].
 
-The project provides:
+This model is reasonable for a general agent: only retrieve history when the current task is related, reducing context usage and irrelevant information.
 
-- `backup_openclaw.py`
-- `raw_backup.py`
-- `rollover_artifacts.py`
+Companionship scenarios have different constraints.
 
-Backups cover runtime configuration, long-term memory, conversation records, and related event artifacts. The existence of backups and underlying transcripts solves **physical persistence and disaster recovery**; it is not equivalent to the persona being able to naturally use that information in the current turn.
-
-Therefore, the project does not adopt the criterion that "as long as the data can still be found in the old transcript / JSONL / SQLite, the persona has not forgotten." For companion interaction, if history must await the user explicitly reminding the system to "go look up yesterday's records" in order to re-enter reasoning, a product-level continuity failure has already occurred.
-
-The responsibility of `session_rollover.py` is therefore not merely to create a new session, but to place the session lifecycle after the day-end memory pipeline. The project requires that deployments maintain the order **memory processing precedes rollover**, and as far as possible avoid compaction preceding step04's rewrite of history representation within a single-day session.
-
----
-
-## V. OpenClaw Integration Boundary: Why Native Mechanisms Are Not Directly Used
-
-### 5.1 Capabilities OpenClaw Already Provides
-
-Per the current official documentation, OpenClaw already provides the following infrastructure directly relevant to this project:
-
-- **Agent workspace**: gives each agent an isolated workspace and context files [4];
-- **Persistent memory**: `MEMORY.md`, daily memory, memory search, memory-core, and Dreaming [5][6][12];
-- **Active Memory**: performs active recall in qualifying interaction sessions [7];
-- **Gateway-owned sessions**: session state, reset, and transcripts are managed by the Gateway [9][10];
-- **Compaction**: compresses earlier history into a persistent summary when context approaches the model limit, and continues the current session [10][11];
-- **Message channels**: channels such as Telegram;
-- **Automations**: persistent one-shot and recurring tasks.
-
-Therefore, xiaodou-system's main contribution is not re-implementing sessions, memory search, a scheduler, or Telegram, but defining how these generic primitives jointly serve the **natural-day lifecycle of a companion persona**.
-
-### 5.2 Why "Already Saved" Still Is Not Companion-Style Memory
-
-OpenClaw currently places detailed daily notes in `memory/*.md` and explicitly states that these files are not part of the default Project Context in ordinary turns; ordinary turns mainly read them on demand via `memory_search` / `memory_get` [6]. Active Memory can improve this, but the deep recall in the default `escalate` mode primarily runs when the current message expresses recall intent and there is no strong deterministic hit [7].
-
-The problem this project observed in actual long-term use is that cross-day information, even when written into daily memory, does not necessarily enter the model first during the next natural conversation. If the user explicitly asks "what did we do yesterday," the system can more easily trigger memory search; but a large number of real messages in companionship scenarios do not take this form.
-
-For example:
+A large amount of natural-language carryover contains no explicit recall intent. For example:
 
 ```text
 Yesterday:
@@ -391,121 +539,308 @@ Today:
 "I'm heading out now."
 ```
 
-The second sentence has no strong retrieval keywords, yet the persona is expected to naturally understand the relationship between "heading out" and yesterday's exam arrangement. For this kind of interaction, on-demand search is a remediation path, not a sufficient continuity mechanism.
+The current message does not explicitly ask the system to recall yesterday, nor does it necessarily form a high-quality semantic query; yet for a companion persona, yesterday's exam arrangement is already part of the current relationship state.
 
-OpenClaw's default AGENTS template already requires reading today's and yesterday's daily notes plus `MEMORY.md` at session start [8]; `/new` / `/reset` also preserve the tail of an ending session and re-supply recent notes in the first turn of the new session [9]. These behaviors are worth reusing, but they cannot guarantee:
+Therefore, xiaodou-system does not treat "memory search can eventually find yesterday" as a sufficient condition for cross-day continuity. Recent key state must already be part of the day's working state before the user's current message arrives.
 
-1. that all important relationship state before the session switch has been correctly written into daily memory;
-2. that ordinary turns during long running always have yesterday's key state;
-3. that short utterances without explicit recall intent always trigger the needed history;
-4. that the current day's plan, proactive events, and chat history are understood as one unified episode.
-
-Therefore, xiaodou-system elevates recent cross-day state from "material searchable on demand" to **direct input for the next natural day's Planner and interaction context**; memory search mainly serves supplementary recall of more distant history.
-
-### 5.3 Why OpenClaw Compaction Is Not Allowed to Become a Second History Summary
-
-OpenClaw compaction summarizes earlier dialogue into a persistent `compaction` entry and retains recent messages; subsequent turns run on "compaction summary + uncompressed tail" [10][11]. Before compaction, OpenClaw can also run an automatic memory flush that writes important context into memory files [5].
-
-For general long sessions this is a reasonable context-control mechanism.
-
-But xiaodou-system already has its own:
+Formally:
 
 ```text
-Full session
+OpenClaw generic retrieval path:
+
+Current Query
+    ↓
+Decide whether history is needed
+    ↓
+Search
+    ↓
+Past Memory
+
+
+xiaodou-system recent-continuity path:
+
+Past Episode
+    ↓
+Current State
+    ↓
+Interpret Current Query
+```
+
+The two are not in conflict. Distant history can still use OpenClaw memory search; but yesterday's important events do not depend on ad-hoc retrieval to hold.
+
+### 5.3 Session Reset and Memory Commit Not Yet Completed
+
+The physical existence of a Session transcript is not equivalent to the persona being able to use that content now.
+
+Even if old history is still stored in a transcript, SQLite, or other archive, if the new Session lacks the corresponding state, the user may still see:
+
+```text
+Yesterday:
+The user already said they are going to the hospital today.
+
+Today:
+User: "I've arrived."
+
+Persona:
+"Arrived where?"
+```
+
+From the standpoint of underlying storage, history may not have been lost; from the standpoint of companionship interaction, continuity has already been interrupted.
+
+Therefore, xiaodou-system does not treat "old transcripts are recoverable" as a normal memory mechanism, but only as an audit and disaster-recovery capability. Normal cross-day state must be explicitly committed before the Session boundary.
+
+### 5.4 Compaction and Dual Summary Authority
+
+OpenClaw's compaction is used to control the context size of long Sessions. Earlier conversations are summarized into a persistent compaction entry, which is then used with:
+
+```text
+Compaction Summary
++
+Recent uncompressed messages
+```
+
+to continue the current Session [6][10].
+
+In a general agent, this is a necessary context-management mechanism.
+
+xiaodou-system already has another cross-day summarization chain:
+
+```text
+Complete Session
 + DailyPlan
 + Event Journal
 + Proactive messages
-+ User interactions
++ User replies
         ↓
-step04 Memory Compiler
+step04
         ↓
-DailyMemory / MEMORY.md
+Daily Memory / MEMORY.md
 ```
 
-If the same history is first summarized by OpenClaw compaction, the system may simultaneously contain:
+If the same history is allowed to pass first through OpenClaw compaction and then through the xiaodou-system Memory Compiler, later models may read both:
 
 ```text
 OpenClaw Compaction Summary
             +
-xiaodou DailyMemory / MEMORY.md
+xiaodou Daily Memory
 ```
 
-The two summaries can both be basically correct yet not fully consistent. They may differ in choices around timing, event causality, relationship state, uncompleted items, or information priority. For a companion persona, the risk of "multiple history interpretations simultaneously participating in the current persona state" outweighs the benefit of saving some context tokens.
+Even if neither has obvious factual errors, they can differ in detail retention, time ordering, event causality, uncompleted items, relationship state, and importance judgment.
 
-Hence, this project adopts the **single memory authority** principle:
-
-> The current session retains the day's high-fidelity raw working memory; cross-day semantics are formally generated only by xiaodou-system's step04.
-
-This does not mean OpenClaw compaction is forever forbidden. It means: **compaction should not become the cross-day canonical memory path of this project**. If the sheer volume of a single-day conversation is itself enough to hit the model context ceiling, then a larger context budget, an earlier controlled boundary, or dedicated adaptation is needed; the current version does not unconditionally guarantee that "compaction will never occur within a day."
-
-### 5.4 Why a Daily Session Rollover Is Retained
-
-The OpenClaw main session currently has no automatic reset by default; daily / idle reset are optional [9][10]. Therefore, xiaodou-system's 04:00 rollover is not following OpenClaw default behavior, but is an actively set **natural-day boundary**.
-
-Its purpose is twofold:
-
-1. **Protect single memory authority**  
-   Before a session grows long enough to require compaction, hand the day's full session to step04 for unified consolidation.
-
-2. **Keep the working-memory boundary clear**  
-   A new session mainly carries the raw interactions of the new natural day; cross-day state from past dates is provided by `DailyMemory / MEMORY.md`, not implicitly by a session history that is growing longer and has been summarized multiple times.
-
-Therefore:
+This problem is not "data loss" in the traditional sense, but **semantic authority fragmentation**:
 
 ```text
-Day N Full Session
-        ↓
-step04 finalize / incremental / attach
-        ↓
-Cross-day memory completes its main persistence
-        ↓
-session rollover
-        ↓
-Day N+1
+The same history
+    ├── Summary A
+    └── Summary B
+
+Two summaries simultaneously become the basis for future reasoning
 ```
 
-Here rollover is a **Memory Commit Boundary**, not "forgetting yesterday."
+A companionship system needs stable interpersonal state, so such uncertainty is unacceptable.
 
-Historical transcripts / JSONL / SQLite still have backup, audit, and exception-recovery value, but they are not the primary memory interface for the persona's day-to-day reasoning. For this project, **being able to recover history from disk ≠ the persona maintaining continuity at the product level**.
+xiaodou-system adopts the **Single Memory Authority** principle:
 
-### 5.5 Why the Current Version Still Uses `cron + at`
+> The day's complete Session serves as raw working evidence; cross-day consolidated memory is formally generated only by step04.
 
-OpenClaw's Automations can already perform persistent scheduled tasks. xiaodou-system currently still uses Linux `cron` and `at`, mainly for the following implementation constraints:
+This does not mean OpenClaw compaction itself is wrong; rather, its responsibility overlaps with this project's cross-day Memory Compiler. If both assume canonical history, they create unnecessary semantic conflict.
 
-- step02, step03, and step04 need to correspond directly to Linux file state and independent Python processes;
-- each stage needs to leave inputs, outputs, and exit states that can be inspected individually;
-- step03's future events naturally fit one-shot `at` jobs;
-- the current validation environment already has a complete ops chain built around `flock + cron + atd`;
-- even if system scheduling temporarily loses contact with the OpenClaw Gateway, it can still leave behind whether an event should have occurred, the failure reason, and a state awaiting recovery.
+### 5.5 Necessity of Daily Rollover
 
-This approach should therefore be understood as the orchestration backend of the current version, not a denial of OpenClaw's scheduler capability. Future versions can add an OpenClaw Automations adapter while keeping the DailyPlan, Event Model, and step04 data contracts unchanged.
+OpenClaw can maintain a persistent Session and also supports configurable daily / idle reset [5][6].
 
-### 5.6 Why an Independent step04 Is Retained
+xiaodou-system still actively performs daily rollover to establish a deterministic boundary between two goals:
 
-OpenClaw's current memory system already has Markdown memory, memory search, automatic memory flush, Active Memory, Dreaming, and consolidation [5–8][12]. xiaodou-system retains an independent step04 not because OpenClaw "has no memory system," but because the two optimize for different goals.
+1. **keep the day's complete raw Session as much as possible;**
+2. **after a cross-day boundary, only use state that has passed through the project's own Memory Pipeline.**
 
-OpenClaw mainly solves:
+If the Session continues indefinitely:
 
-- how information is persisted;
-- how it is indexed and recalled on demand;
-- how long sessions are compacted;
-- which short-term signals are worth promoting to durable memory.
+```text
+Day 1
++ Day 2
++ Day 3
++ Day 4
+...
+```
 
-xiaodou-system additionally requires:
+it will inevitably hit the context-window constraint and enter compaction.
 
-- that yesterday's plan, actual events, proactive messages, and chats form a unified episode;
-- that yesterday's key state participates directly in the next day rather than waiting for semantic recall;
-- that there is only one canonical compilation path from the current session to cross-day memory;
-- that session rollover sits after that path;
-- that the user can inspect what was retained, merged, and compressed each day.
+If it is reset each day before memory is complete, information from that day that has not yet entered consolidated memory may leave the current working context.
 
-Therefore, step04 is closer to an **episodic day compiler** than another generic memory-search engine.
+Therefore it adopts:
 
-## VI. Runtime Evidence
+```text
+Complete single-day Session
+        ↓
+Memory Commit
+        ↓
+Rollover
+```
 
-This section only shows actual runtime results from the current Linux validation environment, to illustrate that the message chain and file persistence are wired through. The following screenshots do not constitute chat-quality evaluation, user studies, or cross-environment performance proof.
+Rollover effectively constitutes a **Memory Commit Boundary**.
 
-### 6.1 Telegram Message Chain
+### 5.6 Automations and the Daily Event Model
+
+OpenClaw Automations can already execute one-shot and recurring tasks [12].
+
+But a scheduler solves:
+
+```text
+when to run a certain task
+```
+
+while xiaodou-system needs to define:
+
+```text
+what this event means in the persona's life today
+```
+
+For example, also at 17:45:
+
+```text
+Scheduler:
+17:45 execute job A
+```
+
+The Daily Event Model additionally contains:
+
+```text
+activity
+location
+mood
+interaction_window
+silent
+selfie
+previous_state
+next_state
+relationship_context
+```
+
+So Automations can replace part of the current `cron + at` backend, but cannot replace the DailyPlan and Event Model.
+
+The current version uses `cron + at` because its runtime chain has already been validated around:
+
+```text
+Linux process
++ file state
++ flock
++ event journal
++ transaction
+```
+
+and scheduling state can be inspected independently of the Gateway.
+
+In the future, an OpenClaw Automations adapter can be added, as long as the semantics of the DailyPlan, Event Model, and Memory Pipeline remain unchanged.
+
+### 5.7 Active Memory and Recent Working State
+
+Active Memory improves the problem of purely on-demand retrieval, but it still belongs to the mechanism of "after the current interaction occurs, decide what to recall based on the current input" [9].
+
+xiaodou-system's recent-memory goal is more strict:
+
+> Before the user message arrives, yesterday's key state has already become today's running state.
+
+Therefore the two serve different levels:
+
+```text
+xiaodou recent-state continuity
+responsible for: yesterday / today's key state
+
+OpenClaw Active Memory / memory search
+responsible for: more distant, topic-based, semantic supplementary recall
+```
+
+This is a complementary relationship, not a substitution.
+
+### 5.8 Adaptation Conclusion
+
+OpenClaw has already solved generic Agent Runtime problems such as Session, Memory, Search, Compaction, Channel, and Automation, but these capabilities do not by default include the following application-layer constraints:
+
+```text
+the natural day as a state boundary
+DailyPlan as the world state of the day
+events belong to the persona's life, not merely background tasks
+yesterday's key state must directly participate in today
+keep the single-day Session as high-fidelity raw text as much as possible
+only one canonical compiler for cross-day history
+Memory Commit must precede Rollover
+```
+
+The necessity of xiaodou-system is constituted jointly by these constraints, rather than by the absence of any one specific OpenClaw feature.
+
+---
+
+## VI. Reliability and State Consistency
+
+### 6.1 Data Contracts
+
+The project uses JSON Schema to structurally constrain cross-stage data, currently including 19 schemas.
+
+Schemas are used to detect:
+
+- missing required fields;
+- type errors;
+- out-of-range enum values;
+- model outputs that do not conform to the protocol.
+
+Schemas cannot guarantee that natural-language facts are correct, nor that different model calls generate identical content.
+
+### 6.2 Idempotency and Concurrency Control
+
+step03, through:
+
+- stable event identity;
+- idempotency state checks;
+- `flock`;
+- Event Journal;
+- Transaction State;
+
+avoids duplicate sends caused by cron re-entry, duplicate `at` triggers, or manual reruns.
+
+### 6.3 External Side-Effect Transactions
+
+Message sending and Session injection are two independent side effects.
+
+If:
+
+```text
+Telegram send = succeeded
+chat.inject = failed
+```
+
+the event cannot be retried as a whole, otherwise it may be sent twice.
+
+The system therefore records, separately:
+
+```text
+generated
+delivered
+injected
+committed
+```
+
+Recovery logic decides the compensation operation based on which stage has completed.
+
+### 6.4 Backup and Audit
+
+The project provides:
+
+- `backup_openclaw.py`
+- `raw_backup.py`
+- `rollover_artifacts.py`
+
+Backups cover runtime configuration, long-term memory, chat records, and related event artifacts.
+
+The purpose of backup is to preserve evidence and disaster-recovery material, not to replace the normal memory-continuity mechanism.
+
+---
+
+## VII. Runtime Validation
+
+The current validation conclusion only indicates that the main runtime chain in a Linux environment is wired through; it does not constitute proof of chat quality, long-term SLA, or cross-platform performance.
+
+### 7.1 Telegram Interaction
 
 <p align="center">
   <img src="docs/screenshot-telegram.jpg" alt="Telegram conversations in normal operation" width="800"/>
@@ -513,9 +848,9 @@ This section only shows actual runtime results from the current Linux validation
   <em>Fig. 2-a: Day-to-day Telegram conversations and selfies by the persona</em>
 </p>
 
-The current implementation can trigger proactive events from the daily plan and, when event policy allows, generate text and optional images, then send them via Telegram.
+The current implementation can trigger proactive events from the DailyPlan, generate text and optional images when policy allows, and send them via Telegram.
 
-### 6.2 File Persistence
+### 7.2 File Persistence
 
 <p align="center">
   <img src="docs/filesystem-directories.jpg" alt="auto-persisted daily / chatlog / daily_selfies directories" width="800"/>
@@ -523,15 +858,41 @@ The current implementation can trigger proactive events from the daily plan and,
   <em>Fig. 2-b: The auto-persisted daily / chatlog / daily_selfies data directories</em>
 </p>
 
-During operation, `daily/`, `chatlog/`, `daily_selfies/`, and `MEMORY.md` respectively store plan/execution data, conversation records, image artifacts, and long-term memory. Together they form the main input for both fault diagnosis and day-end consolidation.
+During operation:
+
+```text
+daily/
+```
+
+stores plans and event state;
+
+```text
+chatlog/
+```
+
+stores chat records;
+
+```text
+daily_selfies/
+```
+
+stores image artifacts;
+
+```text
+MEMORY.md
+```
+
+stores the consolidated long-term state.
+
+These files together form the primary input for both day-end memory and fault diagnosis.
 
 ---
 
-## VII. Deployment
+## VIII. Deployment
 
-### 7.1 Environment Requirements
+### 8.1 Environment Requirements
 
-The current validation target is **Linux**:
+The current validation environment is **Linux**:
 
 - Python 3.10+
 - `at` / `atd`
@@ -545,9 +906,7 @@ The current validation target is **Linux**:
 pip install -r requirements.txt
 ```
 
-The OpenClaw CLI still provides `openclaw configure`, `openclaw health`, and other commands; the Gateway default port is `18789`, but it can be changed via configuration [10][11].
-
-### 7.2 Configuring OpenClaw
+### 8.2 OpenClaw Initialization
 
 ```bash
 openclaw configure
@@ -558,18 +917,16 @@ At minimum you need to complete:
 
 - a usable model/provider configuration;
 - Gateway startup and health checks;
-- Telegram channel configuration;
-- the workspace / session correspondence used by this instance.
+- the Telegram channel;
+- workspace / session correspondence.
 
-If the current host already has a Gateway occupying the default port, configure another port for the instance, for example:
+If the default port is occupied, configure another Gateway port, for example:
 
 ```bash
 openclaw config set gateway.port 19203
 ```
 
-Afterward, start or restart the Gateway per the running style of the installed OpenClaw version.
-
-### 7.3 Initializing xiaodou-system
+### 8.3 xiaodou-system Initialization
 
 ```bash
 git clone https://github.com/SHIJINS66/xiaodou-system.git
@@ -577,50 +934,50 @@ cd xiaodou-system
 bash init.sh
 ```
 
-`init.sh` is responsible for:
+`init.sh` performs:
 
-1. checking the runtime environment;
-2. preparing the persona core-file templates;
-3. generating `settings.yaml`;
-4. creating runtime directories;
-5. validating scripts and configuration;
-6. optionally installing cron.
+1. environment checks;
+2. persona core-file preparation;
+3. `settings.yaml` generation;
+4. runtime directory creation;
+5. script and configuration validation;
+6. optional cron installation.
 
-The default instance directory is:
+Default instance directory:
 
 ```text
 ~/.openclaw/workspace
 ```
 
-Another directory can be specified with `--instance-dir`.
+Another location can be specified with `--instance-dir`.
 
-For existing core files, the initializer should keep the original files unoverwritten; it only creates templates or skeletons for missing items.
+Existing persona files are not actively overwritten by the initialization process; templates or skeletons are created only for missing files.
 
-### 7.4 Running the Setup Wizard
+### 8.4 Setup Wizard
 
 ```bash
 python3 scripts/guided_setup.py
 ```
 
-The wizard processes, in order:
+The wizard handles:
 
 1. Python / atd / OpenClaw / timezone checks;
-2. persona core-file checks;
+2. core-file checks;
 3. API key configuration;
 4. Telegram token and chat id binding;
-5. OpenClaw Gateway session binding;
-6. xiaodou-system memory write-contract configuration;
+5. Gateway Session binding;
+6. xiaodou-system memory-contract configuration;
 7. final validation;
 8. Gateway configuration activation.
 
 Available modes:
 
 ```text
---non-interactive    scripted configuration with defaults
---verify-only        run only the final validation
+--non-interactive
+--verify-only
 ```
 
-### 7.5 Installing Scheduled Tasks
+### 8.5 Scheduled Tasks
 
 ```bash
 bash init.sh --instance-dir ./instance --install-cron
@@ -643,14 +1000,9 @@ Default schedule:
 Sun 04:30      weekly compress
 ```
 
-step03 depends on the system `atd` service. After installation, confirm:
+step03 depends on `atd`.
 
-```bash
-systemctl status atd
-openclaw health
-```
-
-### 7.6 Configuration Files
+### 8.6 Configuration
 
 Runtime configuration is centralized in:
 
@@ -658,7 +1010,7 @@ Runtime configuration is centralized in:
 settings.yaml
 ```
 
-Primary configuration domains include:
+Primary configuration domains:
 
 ```text
 system
@@ -671,11 +1023,11 @@ models
 delivery
 ```
 
-Persona content should still be placed primarily in the 7 Markdown files rather than in Python logic.
+Persona personality and life content should remain in Markdown files rather than in Python control logic.
 
 ---
 
-## VIII. Directory Structure
+## IX. Directory Structure
 
 ```text
 ├── init.sh
@@ -690,32 +1042,53 @@ Persona content should still be placed primarily in the 7 Markdown files rather 
 ├── providers/                 # LLM / image / gateway / delivery
 ├── prompts/                   # per-stage model prompts
 ├── schemas/                   # JSON Schema
-├── cron/                      # step02 / step03 / step04 scheduling templates
+├── cron/                      # step02 / step03 / step04
 ├── docs/                      # architecture diagram and runtime screenshots
 └── settings.example.yaml
 ```
 
-A running instance also produces `daily/`, `chatlog/`, selfie artifacts, event logs, and backup files; these are runtime data and should not be conflated with the source directory's responsibilities.
+A running instance also produces:
+
+```text
+daily/
+chatlog/
+daily_selfies/
+event journal
+transaction state
+backups/
+```
 
 ---
 
-## IX. Current Limitations
+## X. Limitations and Future Work
 
-### 9.1 Validation Scope
+### 10.1 Validation Scope
 
-The current version has only been validated end-to-end on Linux. The "runnable" conclusion in this README refers only to the full chain having executed successfully in that validation environment.
+The current system has only been validated end-to-end on Linux.
 
 Not yet established:
 
-- a multi-machine / multi-distribution compatibility matrix;
+- a multi-distribution compatibility matrix;
 - Windows / macOS scheduling adaptation;
-- long-cycle failure-rate and SLA statistics;
-- a manual or automated evaluation benchmark for proactive-message quality;
+- long-cycle failure-rate and SLA data;
+- a proactive-message quality evaluation benchmark;
 - systematic migration tests across different personas.
 
-### 9.2 Platform
+### 10.2 Single-Day Context Budget
 
-The current implementation depends on:
+The system hopes to keep the complete, uncompacted Session within a natural day as far as possible, but the model context window still has a hard ceiling.
+
+If the volume of messages, tool outputs, or proactive events within a day is unusually high, compaction may still be triggered before rollover. The current version therefore cannot interpret "daily rollover" as the absolute elimination of compaction.
+
+High-interaction-volume scenarios will later need:
+
+- single-day context budget monitoring;
+- controlled day-internal checkpoints;
+- or a dedicated context adapter.
+
+### 10.3 Platform Dependencies
+
+The current control plane depends on:
 
 ```text
 cron
@@ -723,54 +1096,62 @@ at / atd
 flock
 ```
 
-Therefore Windows and macOS cannot directly reuse the same scheduling implementation. If cross-platform support is extended in the future, the data contracts of step02 / step03 / step04 should be kept unchanged, and only the scheduler / lock adapter should be replaced.
+Windows and macOS require replacing the platform-specific scheduler / lock adapter, while keeping the data contracts of the DailyPlan, Event Model, and Memory Pipeline unchanged.
 
-### 9.3 Message Channels
+### 10.4 Message Channels
 
-The currently validated channel is Telegram. `providers/` has separated delivery from core business logic, but other channels must be separately implemented and tested for sending, media, identity binding, and session mapping.
+The currently validated channel is Telegram.
 
-### 9.4 Single-Day Session Context Budget
+Other message channels need separate validation of:
 
-This project aims to keep the full, uncompacted session within a natural day as far as possible, then let step04 perform cross-day memory consolidation. But the model context window still has a hard ceiling; if the volume of messages, tool outputs, or proactive events within a day is unusually high, OpenClaw may still trigger compaction before rollover.
+- text sending;
+- media sending;
+- identity binding;
+- Session mapping;
+- proactive-message write-back.
 
-Therefore, the current implementation needs to monitor the single-day context budget. For very high-interaction-volume scenarios, future versions need to add controlled day-internal checkpoints or a dedicated context adapter, rather than simply assuming "a daily rollover is enough to avoid compaction forever."
+### 10.5 External Models and Services
 
-### 9.5 Models and External Services
-
-DeepSeek and Seedream are both external dependencies. API versions, model names, pricing, rate limits, and service availability may change, so production deployments should manage them via provider configuration rather than relying on the fixed service status stated in this README.
+DeepSeek and Seedream are external services. Model names, APIs, pricing, rate limits, and availability may change, so production deployments should manage them via provider configuration.
 
 ---
 
-## X. Conclusion
+## XI. Conclusion
 
-xiaodou-system decomposes the operational problem of long-term companion agents into an explicit natural-day control loop:
+xiaodou-system models a long-term companion agent as a sustained operating system bounded by the natural day, rather than a dialogue interface driven only by user input.
+
+Its core state transition is:
 
 ```text
-Persona and cross-day state
-    ↓
-step02: generate and validate the day's plan
-    ↓
-step03: schedule and execute proactive events
-    ↓
-Full Day Session + Event Evidence
-    ↓
-step04: compile DailyMemory / update MEMORY
-    ↓
-Controlled Session Rollover
-    ↓
+Persona and historical state
+        ↓
+DailyPlan
+        ↓
+Scheduled / Executed Events
+        ↓
+Working Session
+        ↓
+Daily Memory Compiler
+        ↓
+Consolidated Memory
+        ↓
+Session Rollover
+        ↓
 Next natural day
 ```
 
-The core of the framework is neither a new language-model algorithm nor a re-implementation of OpenClaw, but a combination of four engineering constraints:
+The system's main engineering contribution lies not in re-implementing OpenClaw, nor in proposing new language-model algorithms, but in making explicit four long-term companionship operating constraints:
 
-1. **Separation of persona content from runtime code**;
-2. **Separation of the generative model from the deterministic control plane**;
-3. **Modeling Persistence, Retrieval, and Continuity as separate concerns**;
-4. **Keeping a single canonical conversion path between the day's full session and cross-day consolidated memory**.
+1. **Separation of persona content from runtime code;**
+2. **Separation of the generative model from the deterministic control plane;**
+3. **Separation of the Working Session from Consolidated Memory;**
+4. **Only one canonical cross-day semantic conversion path for the same history.**
 
-OpenClaw solves general-agent runtime, session, memory, search, compaction, and scheduling problems; xiaodou-system goes further and defines "how a companion persona lives through a day continuously and hands that day unambiguously to the next."
+OpenClaw provides generic Agent Runtime capabilities such as Session, Memory, Search, Compaction, Channel, and Automation; xiaodou-system further defines, on top of these primitives, a time model, DailyPlan, an event state machine, proactive interaction transactions, and a cross-day memory protocol.
 
-In the current Linux + OpenClaw + Telegram validation environment, the above pipeline has formed a complete closed loop. Follow-up work should focus on expanding platform and message-channel coverage, establishing quantifiable stability tests, monitoring the single-day context budget, and verifying that persona migration can be done without modifying the core scheduling and memory protocols.
+For a companion agent, what truly needs to be maintained is not that "historical data still exists," but that the persona can naturally bring yesterday into today without relying on the user's explicit reminder.
+
+---
 
 ## References
 
@@ -787,43 +1168,34 @@ In the current Linux + OpenClaw + Telegram validation environment, the above pip
    https://docs.openclaw.ai/concepts/agent-workspace  
    https://docs.openclaw.ai/concepts/context
 
-5. OpenClaw Documentation. **Memory overview**.  
+5. OpenClaw Documentation. **The main session / Session management**.  
+   https://docs.openclaw.ai/concepts/main-session  
+   https://docs.openclaw.ai/concepts/session
+
+6. OpenClaw Documentation. **Session management & compaction**.  
+   https://docs.openclaw.ai/reference/session-management-compaction
+
+7. OpenClaw Documentation. **Memory**.  
    https://docs.openclaw.ai/concepts/memory
 
-6. OpenClaw Documentation. **System prompt / memory bootstrap behavior**.  
-   https://docs.openclaw.ai/concepts/system-prompt
+8. OpenClaw Documentation. **Dreaming**.  
+   https://docs.openclaw.ai/concepts/dreaming
 
-7. OpenClaw Documentation. **Active Memory**.  
+9. OpenClaw Documentation. **Active Memory**.  
    https://docs.openclaw.ai/concepts/active-memory
 
-8. OpenClaw Documentation. **Default AGENTS.md**.  
-   https://docs.openclaw.ai/reference/AGENTS.default
+10. OpenClaw Documentation. **Context / Compaction**.  
+    https://docs.openclaw.ai/concepts/context
 
-9. OpenClaw Documentation. **The main session**.  
-   https://docs.openclaw.ai/concepts/main-session
-
-10. OpenClaw Documentation. **Session management**.  
-    https://docs.openclaw.ai/concepts/session
-
-11. OpenClaw Documentation. **Session management & compaction deep dive**.  
-    https://docs.openclaw.ai/reference/session-management-compaction
-
-12. OpenClaw Documentation. **Dreaming**.  
-    https://docs.openclaw.ai/concepts/dreaming
-
-13. OpenClaw Documentation. **Automations**.  
-    https://docs.openclaw.ai/automation/cron-jobs
-
-14. OpenClaw Documentation. **Telegram channel**.  
+11. OpenClaw Documentation. **Telegram channel**.  
     https://docs.openclaw.ai/channels/telegram
 
-15. OpenClaw Documentation. **Configure / CLI**.  
-    https://docs.openclaw.ai/cli/configure
+12. OpenClaw Documentation. **Automations**.  
+    https://docs.openclaw.ai/automation/cron-jobs
 
-16. OpenClaw Documentation. **Gateway health**.  
-    https://docs.openclaw.ai/gateway/health
+> OpenClaw capability boundaries were verified against official documentation on **2026-08-16**. Later versions may adjust default Session, Memory, Compaction, or scheduling behavior; at deployment, follow the official documentation of the installed version.
 
-> External technical descriptions and OpenClaw capability boundaries were verified against official documentation on **2026-08-16**. OpenClaw may adjust default session, memory, compaction, bootstrap, or scheduling mechanisms in later versions; at deployment, follow the official documentation of the installed version.
+---
 
 ## License
 
